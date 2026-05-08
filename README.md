@@ -19,25 +19,42 @@ Built for PaperMC 1.21.11.
 
 ## 🧿 Totems
 
-### 🌩 Storm Totem
+Each totem is crafted at a Totem Altar using a vanilla Totem of Undying and a specific ingredient dropped by a mob. When the totem activates (on death), its unique ability triggers instead of the vanilla resurrection effect — you still survive, but the outcome is very different.
 
-**Item:** Chorus Fruit
-Randomly teleports the player a short distance when activated.
-
-### 👁 Guardian Totem
-
-**Item:** Ender Pearl / Eye of Ender
-Links two players together. If one player’s totem activates, the ally is teleported to them.
-
-### 🌑 Shadow Totem
-
-Temporarily hides the player when activated.
+---
 
 ### 💥 Blast Totem
+**Ingredient:** Volatile Bone *(rare drop from Wither Skeletons)*
 
-Pushes nearby enemies away with an explosion effect.
+On pop, releases a shockwave that launches all nearby living entities away from you. No block damage — purely a knockback burst. Useful for escaping a crowd or punishing melee rushers.
 
-More totems may be added over time.
+---
+
+### 🌑 Shadow Totem
+**Ingredient:** Shadow Heartwood *(rare drop from Creakings)*
+
+On pop, makes you fully invisible for a configurable duration. Your equipped armor is also hidden from other players during this window, so you cannot be spotted by silhouette. Useful for repositioning or escaping pursuit after a fight goes wrong.
+
+---
+
+### 🌩 Storm Totem
+**Ingredient:** Void Chorus *(rare drop from Endermen)*
+
+On pop, teleports you to a random safe location 25–35 blocks away. The plugin guarantees you land on solid ground with two clear blocks above — no landing in lava or inside walls. Useful for creating instant distance without a predictable direction.
+
+---
+
+### 🔀 Swap Totem
+**Ingredient:** Fractured Echo *(rare drop from Shulkers)*
+
+On pop, instantly swaps your position with the nearest player within range. Both players keep their original look direction. Useful for forcing a pursuer into a bad position or pulling a fleeing target back into range.
+
+---
+
+### 👁 Guardian Totem
+**Ingredient:** Sentinel Eye *(rare drop from Guardians)*
+
+Unlike other totems, this one must be linked first. Right-click another player while holding an unlinked Guardian Totem to pair both of you — each player receives a linked totem showing the partner’s name. On pop, your linked ally is teleported directly to you and their linked totem is consumed. Works even if the totem was traded to a third player. Useful for duo play and rescue pulls.
 
 ---
 
@@ -61,39 +78,49 @@ Players can:
 
 ## 📜 Commands
 
-| Command         | Description          |
-| --------------- | -------------------- |
-| `/altar create` | Create an altar      |
-| `/altar remove` | Remove an altar      |
-| `/altar list`   | List altar locations |
-| `/altar tp`     | Teleport to altar    |
+All commands use `/totemaltars` (or `/ta` if aliased).
+
+| Command                                    | Permission           | Description                                    |
+| ------------------------------------------ | -------------------- | ---------------------------------------------- |
+| `/totemaltars createaltar`                 | `totemaltars.admin`  | Designate the targeted anvil as a Totem Altar  |
+| `/totemaltars removealtar`                 | `totemaltars.admin`  | Remove the nearest Totem Altar                 |
+| `/totemaltars giveingredient <type> [player]` | `totemaltars.admin` | Give a crafting ingredient to a player        |
+| `/totemaltars givetotem <type> [player]`   | `totemaltars.admin`  | Give a finished totem to a player              |
+| `/totemaltars reload`                      | `totemaltars.admin`  | Reload config.yml without restarting           |
+| `/totemaltars altar`                       | `totemaltars.use`    | Show the location of the nearest Totem Altar   |
 
 ---
 
 ## 🔑 Permissions
 
-| Permission          | Description       |
-| ------------------- | ----------------- |
-| `totalaltar.admin`  | Full admin access |
-| `totalaltar.use`    | Use altar systems |
-| `totalaltar.create` | Create altars     |
+| Permission           | Default | Description                                                     |
+| -------------------- | ------- | --------------------------------------------------------------- |
+| `totemaltars.admin`  | op      | Access to all admin commands (createaltar, removealtar, give*, reload) |
+| `totemaltars.use`    | true    | Interact with Totem Altars and use `/totemaltars altar`         |
 
 ---
 
 ## 📦 Installation
 
-1. Download the plugin jar
-2. Place it inside `/plugins`
+**Required dependencies (must be installed first):**
+- [ProtocolLib](https://www.spigotmc.org/resources/protocollib.1997/) — required; the plugin will not load without it
+
+**Optional dependencies:**
+- [PlaceholderAPI](https://www.spigotmc.org/resources/placeholderapi.6245/) — enables cooldown placeholders for scoreboards and HUDs
+
+**Steps:**
+1. Install ProtocolLib into `/plugins`
+2. Download the TotemAltars jar and place it inside `/plugins`
 3. Restart the server
-4. Configure settings if needed
+4. Configure `plugins/TotemAltars/config.yml` as needed
 
 ---
 
 ## ✅ Compatibility
 
 * PaperMC 1.21.11
-* ProtocolLib support
-* PlaceholderAPI support (if enabled)
+* ProtocolLib (required — hard dependency)
+* PlaceholderAPI (optional)
 
 ---
 
