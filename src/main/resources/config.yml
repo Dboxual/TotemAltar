@@ -1,0 +1,64 @@
+# ============================================================
+#  TotemAltars Configuration
+# ============================================================
+
+# Drop chances per totem type (0.0 = never, 1.0 = always)
+drop-chances:
+  blast:    0.10   # Wither Skeleton → Volatile Bone
+  shadow:   0.15   # Creaking        → Shadow Heartwood
+  storm:    0.10   # Enderman        → Void Chorus    (Warped Forest OR during a storm)
+  swap:     0.15   # Shulker         → Fractured Echo
+  guardian: 0.15   # Guardian        → Sentinel Eye
+
+# Cooldown (seconds) applied to ALL totem types after any totem pops.
+global-cooldown: 15
+
+# Per-ability tuning
+abilities:
+  blast:
+    radius: 8.0
+    knockback-strength: 3.0
+  shadow:
+    duration-seconds: 15
+  storm:
+    min-distance: 25
+    max-distance: 35
+    max-attempts: 50
+  swap:
+    range: 25
+
+# Display names for custom items — supports & colour codes
+item-names:
+  volatile-bone:    "&7Volatile Bone"
+  shadow-heartwood: "&8Shadow Heartwood"
+  void-chorus:      "&dVoid Chorus"
+  fractured-echo:   "&eFractured Echo"
+  sentinel-eye:     "&3Sentinel Eye"
+  blast-totem:      "&cBlast Totem"
+  shadow-totem:     "&8Shadow Totem"
+  storm-totem:      "&dStorm Totem"
+  swap-totem:       "&eSwap Totem"
+  guardian-totem:   "&3Guardian Totem"
+
+# Plugin messages — supports & colour codes
+messages:
+  global-cooldown-message:       "&cTotem on cooldown! &e{seconds}s &cremaining."
+  blast-activated:               "&cBlast Totem Activated!"
+  shadow-activated:              "&8Shadow Totem Activated!"
+  storm-activated:               "&dStorm Totem Activated!"
+  swap-activated:                "&eSwap Totem Activated!"
+  swap-no-target:                "&cNo player within range to swap with!"
+  guardian-activated:            "&3Guardian Totem Activated! Your ally has been pulled to you."
+  guardian-ally-teleported:      "&3You were pulled to &f{player} &3by their Guardian Totem!"
+  guardian-link-success:         "&3Guardian link established with &f{player}&3! Both of you now hold linked Guardian Totems."
+  guardian-link-success-target:  "&f{player} &3has linked their Guardian Totem with you!"
+  guardian-already-linked:       "&cYou already have an active Guardian link."
+  guardian-target-linked:        "&cThat player already has an active Guardian link."
+  guardian-self-link:            "&cYou cannot link to yourself."
+  guardian-not-linked:           "&7Guardian Totem activated, but it was not linked to anyone."
+  guardian-partner-offline:      "&cYour linked Guardian partner is offline."
+  no-safe-location:              "&cCouldn't find a safe teleport location!"
+  reload-success:                "&aTotemAltars config reloaded!"
+  give-success:                  "&aGiven &e{amount}x {item} &ato &e{player}&a."
+  player-not-found:              "&cPlayer not found."
+  invalid-type:                  "&cInvalid totem type. Use: blast, shadow, storm, swap, or guardian."

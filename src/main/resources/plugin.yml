@@ -1,0 +1,21 @@
+name: TotemAltars
+version: '${pluginVersion}'
+main: com.totemaltars.TotemAltars
+api-version: '1.21'
+description: Craft custom enchanted totems at admin-created Totem Altars using rare mob drops.
+authors: [ Admin ]
+depend: [ ProtocolLib ]
+softdepend: [ PlaceholderAPI ]
+
+commands:
+  totemaltars:
+    description: TotemAltars commands.
+    usage: /totemaltars <createaltar|removealtar|giveingredient|givetotem|reload|altar>
+
+permissions:
+  totemaltars.admin:
+    description: Access to all TotemAltars admin commands (createaltar, removealtar, give*, reload).
+    default: op
+  totemaltars.use:
+    description: Ability to interact with Totem Altars and use /totemaltars altar.
+    default: true

@@ -1,0 +1,81 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.totemaltars'
+
+// ── Auto-versioning ───────────────────────────────────────────────────────────
+// version.properties stores the authoritative patch number.
+// Every `gradle jar` run bumps the patch and writes it back.
+
+def versionFile = file('version.properties')
+
+// Read current version at configuration time so it's available everywhere
+def loadVersion = {
+    def p = new Properties()
+    versionFile.withInputStream { p.load(it) }
+    return p.getProperty('version', '1.0.4')
+}
+version = loadVersion()
+
+tasks.register('incrementVersion') {
+    doFirst {
+        def p = new Properties()
+        versionFile.withInputStream { p.load(it) }
+        def old   = p.getProperty('version', '1.0.4')
+        def parts = old.tokenize('.')
+        def next  = "${parts[0]}.${parts[1]}.${parts[2].toInteger() + 1}"
+        p.setProperty('version', next)
+        versionFile.withOutputStream { p.store(it, null) }
+        project.version = next
+        logger.lifecycle("TotemAltars version: ${old} → ${next}")
+    }
+}
+
+// Both resource processing and compilation must see the new version
+processResources.dependsOn incrementVersion
+compileJava.dependsOn     incrementVersion
+
+// ── Java ──────────────────────────────────────────────────────────────────────
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+// ── Repositories ─────────────────────────────────────────────────────────────
+repositories {
+    mavenCentral()
+    maven {
+        name = 'papermc'
+        url = 'https://repo.papermc.io/repository/maven-public/'
+    }
+    maven {
+        name = 'dmulloy2'
+        url = 'https://repo.dmulloy2.net/repository/public/'
+    }
+    maven {
+        name = 'placeholderapi'
+        url = 'https://repo.extendedclip.com/content/repositories/placeholderapi/'
+    }
+}
+
+// ── Dependencies ─────────────────────────────────────────────────────────────
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
+    compileOnly 'com.comphenix.protocol:ProtocolLib:5.3.0'
+    compileOnly 'me.clip:placeholderapi:2.11.6'
+}
+
+// ── Resources: stamp plugin.yml with the build version ───────────────────────
+processResources {
+    filesMatching('plugin.yml') {
+        expand(pluginVersion: project.version)
+    }
+}
+
+// ── JAR ───────────────────────────────────────────────────────────────────────
+jar {
+    // Lazy provider reads version AFTER incrementVersion has mutated project.version
+    archiveFileName = provider { "TotemAltars-${project.version}.jar" }
+}

@@ -1,0 +1,179 @@
+================================================================================
+  TOTEMALTARS — CHANGELOG
+================================================================================
+
+Format: [version] date — summary of changes
+
+
+────────────────────────────────────────────────────────────────────────────────
+  [1.0.15]  2026-05-06
+────────────────────────────────────────────────────────────────────────────────
+  Visual identity redesign — all five totems updated for consistency and
+  instant recognition.
+
+  Ingredient changes:
+  - Storm   ingredient: Ender Pearl   → Void Chorus   (Chorus Fruit)
+  - Swap    ingredient: Chorus Fruit  → Fractured Echo (Echo Shard)
+  - Guardian ingredient: Prismarine Crystals → Sentinel Eye (Ender Eye)
+  - Blast / Shadow ingredients unchanged.
+
+  Totem name/color changes:
+  - Storm Totem:  color &9 → &d (light purple), name unchanged.
+  - Swap Totem:   color &d → &e (yellow),        name unchanged.
+
+  Lore redesign (all totems):
+  - Added per-totem flavor text as first lore line.
+  - Cleaner effect/stats formatting with accent colors.
+  - Ingredient credit lines updated to new names.
+  - Linked Guardian Totem lore updated to match.
+
+  Config / guide:
+  - config.yml item-names keys renamed: storm-pearl → void-chorus,
+    mirrored-shard → fractured-echo, guardian-crystal → sentinel-eye.
+  - config.yml drop-chances comments updated.
+  - config.yml activation messages updated to new colors.
+  - GUIDE.txt fully updated: ingredient table, ability details,
+    cooldown section, configuration reference, mob drop notes.
+
+────────────────────────────────────────────────────────────────────────────────
+  [1.0.14]  2026-05-06
+────────────────────────────────────────────────────────────────────────────────
+  - Storm Totem teleport distance reduced to 25–35 blocks (was 50–75).
+  - Replaced "[Altar Forged]" lore on all totems with ingredient-specific
+    fantasy lore: "Forged with Volatile Bone", "Forged with Shadow Heartwood",
+    "Bound with Storm Pearl", "Crafted using Mirrored Shard",
+    "Sealed with Guardian Crystal".
+
+────────────────────────────────────────────────────────────────────────────────
+  [1.0.13]  2026-05-06
+────────────────────────────────────────────────────────────────────────────────
+  - Removed all per-type cooldowns; only a single global cooldown remains.
+  - Global cooldown reduced from 30s to 15s.
+  - Action bar countdown appears immediately after a totem pops and ticks down
+    every second until the cooldown expires, then disappears.
+  - Removed cooldown-message config key (per-type message no longer needed).
+  - Simplified PlaceholderAPI expansion to only expose %totemaltars_cooldown%
+    and %totemaltars_cooldown_bar% (both now reflect the global cooldown).
+
+────────────────────────────────────────────────────────────────────────────────
+  [1.0.12]  2026-05-06
+────────────────────────────────────────────────────────────────────────────────
+  - Altar GUI output slot (middle) now shows a red stained glass pane as the
+    placeholder so players can clearly see where the crafted totem appears.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  [1.0.11]  2026-05-05
+────────────────────────────────────────────────────────────────────────────────
+  - Fixed PlaceholderAPI expansion: replaced stale "grave" type with "guardian"
+    in the TYPES list.
+  - Updated all cooldown placeholders to reflect effective cooldown (the higher
+    of global vs per-type), so they always show the true remaining wait time.
+  - Added %totemaltars_cooldown_global% and %totemaltars_cooldown_bar_global%
+    placeholders for the shared global cooldown.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  [1.0.10]  2026-05-05
+────────────────────────────────────────────────────────────────────────────────
+  - Added global cooldown system: after any totem pops, all totem types are
+    locked for a configurable duration (default 30s). Prevents chaining
+    different totems back-to-back.
+  - New config key: global-cooldown (top-level, default 30)
+  - New message key: global-cooldown-message with {seconds} token
+  - Global cooldown is checked before per-type cooldown in the event handler.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  [1.0.9]  2026-05-05
+────────────────────────────────────────────────────────────────────────────────
+  - Fixed Guardian Totem trade exploit: replaced partner UUID storage with a
+    shared link ID (UUID) stored in both paired totems.
+  - Previously, if Player A traded their linked totem to Player C, popping
+    Player C's totem would not destroy Player B's totem because the IDs
+    no longer matched. The shared link ID fixes this — the pop logic now
+    scans all online players for any totem carrying the same link ID.
+  - Updated GuardianListener to generate UUID linkId = UUID.randomUUID()
+    at link time and pass it to both createLinkedGuardianTotem() calls.
+  - Updated hasLinkedGuardianTotem() to use getGuardianLinkId() instead of
+    the removed getGuardianLink() method.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  [1.0.8]  (prior session)
+────────────────────────────────────────────────────────────────────────────────
+  - Removed Grave/Undead Totem entirely (ingredient, totem, mob drop, ability,
+    config entries, messages).
+  - Added Guardian Totem:
+      - Ingredient: Guardian Crystal (Prismarine Crystals, dropped by Guardian
+        mob at 15% chance).
+      - Linking: right-click another player while holding an unlinked Guardian
+        Totem to pair both players. Each receives a linked totem showing the
+        partner's name. Unlinked totem consumed from initiator's hand.
+      - Ability (on pop): teleports the linked ally to the popping player's
+        location and consumes the ally's linked totem.
+      - Rules: one active link per player; no self-linking; both players must
+        be unlinked to form a new pair.
+  - Added GuardianListener for the right-click linking interaction.
+  - Updated TotemActivationListener: reads guardian link ID before the 1-tick
+    delay (item consumed after the event fires).
+  - Added guardian messages to config.yml.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  [1.0.7]  (prior session)
+────────────────────────────────────────────────────────────────────────────────
+  - Added Swap Totem:
+      - Ingredient: Mirrored Shard (Chorus Fruit, dropped by Shulker at 15%).
+      - Ability (on pop): swaps positions with the nearest player within range
+        (default 25 blocks). Both players keep their original yaw/pitch.
+        Shows "no target" message if nobody is in range.
+  - Changed Swap ingredient material from SHULKER_SHELL to CHORUS_FRUIT.
+  - Updated Swap ingredient lore to reference "chorus fruit" and Shulkers.
+  - Redesigned PlaceholderAPI expansion to universal auto-detect format:
+      %totemaltars_cooldown%      — auto-detects held totem
+      %totemaltars_cooldown_bar%  — bar version
+      Per-type and bar variants also available for all types.
+  - Added abilities.swap.range to config.yml (default 25).
+
+
+────────────────────────────────────────────────────────────────────────────────
+  [1.0.6]  (prior session)
+────────────────────────────────────────────────────────────────────────────────
+  - Added auto-incrementing JAR version: patch number bumps on every
+    `gradle jar` build via version.properties and an incrementVersion task.
+  - JAR output filename now includes version: TotemAltars-X.Y.Z.jar.
+  - plugin.yml version token replaced by Gradle processResources.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  [1.0.5]  (prior session)
+────────────────────────────────────────────────────────────────────────────────
+  - Fixed outdated item lore (Shadow Totem incorrectly said "6 seconds";
+    all totem lore now reads live values from config at item creation time).
+  - Updated ingredient lore to say "Bring to a Totem Altar" (removed
+    references to type-specific altars that no longer exist).
+  - Added PlaceholderAPI soft dependency and TotemAltarsExpansion:
+      Per-type placeholders for seconds and bar format.
+      Types at the time: blast, shadow, storm, grave.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  [1.0.4]  (prior session)
+────────────────────────────────────────────────────────────────────────────────
+  - Removed vanilla crafting recipe system (RecipeManager gutted).
+  - Added Totem Altar system:
+      - Altars are admin-placed via /totemaltars createaltar on any anvil.
+      - Locations saved to altars.yml, persisted across restarts.
+      - TextDisplay holograms spawned above each altar; respawn on chunk load.
+      - Right-click altar anvil opens a 27-slot crafting GUI.
+      - GUI slots: 11 = totem input, 15 = ingredient input, 13 = output.
+      - Output updates live as items are placed; items returned on GUI close.
+  - Added /totemaltars createaltar, removealtar, altar commands.
+  - Added AltarManager, AltarListener, AltarGUI classes.
+  - Added player command /totemaltars altar to locate the nearest altar.
+
+
+================================================================================
+  END OF CHANGELOG
+================================================================================

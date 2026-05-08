@@ -1,0 +1,300 @@
+================================================================================
+  TOTEMALTARS — COMPLETE PLUGIN GUIDE
+  Version: 1.0.14 | Server: Paper 1.21.4+
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+  OVERVIEW
+────────────────────────────────────────────────────────────────────────────────
+
+TotemAltars replaces vanilla Totem of Undying behavior with five unique custom
+totems, each granting a different active ability when the totem "pops" (saves
+you from death). Totems are crafted at admin-placed Totem Altars using special
+ingredients dropped by specific mobs.
+
+Dependencies:
+  - Paper 1.21.4 or newer
+  - PlaceholderAPI (optional, for cooldown placeholders)
+
+Soft dependencies auto-detected on startup. No manual config needed.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  TOTEM TYPES
+────────────────────────────────────────────────────────────────────────────────
+
+Each totem requires one ingredient crafted at a Totem Altar.
+
+  ┌─────────────┬──────────────────────┬─────────────┬───────────────────────┐
+  │ Totem        │ Ingredient           │ Mob Source  │ Drop Chance           │
+  ├─────────────┼──────────────────────┼─────────────┼───────────────────────┤
+  │ Blast        │ Volatile Bone        │ Wither Ske. │ 10% (config)          │
+  │ Shadow       │ Shadow Heartwood     │ Creaking    │ 15% (config)          │
+  │ Storm        │ Void Chorus          │ Enderman    │ 10% (config)          │
+  │ Swap         │ Fractured Echo       │ Shulker     │ 15% (config)          │
+  │ Guardian     │ Sentinel Eye         │ Guardian    │ 15% (config)          │
+  └─────────────┴──────────────────────┴─────────────┴───────────────────────┘
+
+  BLAST TOTEM
+    Ability  : On pop, blasts all nearby entities away from you.
+    Radius   : 8 blocks (config: abilities.blast.radius)
+    Knockback: 3.0 strength (config: abilities.blast.knockback-strength)
+    Effects  : Explosion emitter particle + flame burst + explosion sound.
+    Note     : No block damage. Only affects living entities.
+
+  SHADOW TOTEM
+    Ability  : On pop, grants full invisibility for 15 seconds.
+    Duration : 15 seconds (config: abilities.shadow.duration-seconds)
+    Effects  : Armor is hidden during invisibility. Smoke + enderman sound.
+    Note     : Armor visibility is restored automatically when effect ends.
+
+  STORM TOTEM
+    Ability  : On pop, teleports you 25–35 blocks away to a safe location.
+    Min dist : 25 blocks (config: abilities.storm.min-distance)
+    Max dist : 35 blocks (config: abilities.storm.max-distance)
+    Attempts : 50 random tries to find a safe spot (config: abilities.storm.max-attempts)
+    Effects  : Portal particles at origin and destination + thunder sound.
+    Note     : Will not teleport into lava, water, or inside blocks.
+               Shows "no safe location" message if all attempts fail.
+
+  SWAP TOTEM
+    Ability  : On pop, swaps your position with the nearest player within range.
+    Range    : 25 blocks (config: abilities.swap.range)
+    Effects  : Portal particles at both locations + enderman teleport sound.
+    Note     : Targets the closest online player not in Spectator mode.
+               Both players keep their original yaw/pitch after the swap.
+               Shows "no target" message if no player is in range.
+
+  GUARDIAN TOTEM
+    Ability  : On pop, teleports your linked ally directly to your location.
+    Effects  : Portal particles + enderman teleport sound at destination.
+    Linking  :
+      1. Hold an unlinked Guardian Totem.
+      2. Right-click another player.
+      3. Both players receive a new linked Guardian Totem showing the
+         partner's name in the lore.
+      4. The unlinked totem is consumed from the initiator's hand.
+    Rules    :
+      - A player can only hold one active Guardian link at a time.
+      - Cannot link to yourself.
+      - Both players must be unlinked before a new link can be formed.
+      - The linked totem can be traded to another player — the link ID
+        is embedded in the item itself, so it works regardless of who
+        holds it when it pops.
+      - When the ability fires, the partner's linked totem is consumed
+        automatically from their inventory.
+    Note     : Shows "not linked" if the totem was never paired.
+               Shows "partner offline" if the linked ally is not online.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  COOLDOWN SYSTEM
+────────────────────────────────────────────────────────────────────────────────
+
+A single global cooldown (default: 15 seconds) is applied after any totem pops.
+This prevents chaining different totems back-to-back.
+
+  Config key: global-cooldown
+  Action bar shows a countdown during the cooldown period.
+  All messages are configurable under the messages section in config.yml.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  TOTEM ALTAR SYSTEM
+────────────────────────────────────────────────────────────────────────────────
+
+Altars replace the vanilla crafting system. There are no shapeless/shaped
+recipes — all totem crafting happens exclusively at a Totem Altar.
+
+  CREATING AN ALTAR (admin)
+    1. Place any anvil block (ANVIL, CHIPPED_ANVIL, or DAMAGED_ANVIL).
+    2. Look at the anvil (within 5 blocks).
+    3. Run: /totemaltars createaltar
+    A hologram appears above the anvil and the location is saved to altars.yml.
+
+  REMOVING AN ALTAR (admin)
+    1. Look at the altar anvil (within 5 blocks).
+    2. Run: /totemaltars removealtar
+    The hologram is removed and the entry is deleted from altars.yml.
+
+  HOLOGRAM
+    Two floating text lines appear above every altar:
+      Line 1: "✦ Totem Altar ✦"  (gold)
+      Line 2: "Right-click to craft"  (gray)
+    Holograms are implemented as TextDisplay entities (not armor stands).
+    They respawn automatically when their chunk loads.
+
+  USING THE ALTAR (player)
+    Right-click the altar anvil to open the crafting GUI.
+
+  CRAFTING GUI
+    A 27-slot inventory titled "Totem Altar":
+      Slot 11 (left)  — place a Totem of Undying (vanilla)
+      Slot 15 (right) — place the ingredient for the desired totem type
+      Slot 13 (center)— output slot; click to receive the crafted totem
+    All other slots are filled with gray glass panes (non-interactive).
+    Items placed in slots 11/15 are returned when the GUI is closed.
+
+  PERSISTENCE
+    Altar locations are saved in plugins/TotemAltars/altars.yml.
+    Format: "world:x:y:z" per entry.
+    Altars survive server restarts.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  COMMANDS & PERMISSIONS
+────────────────────────────────────────────────────────────────────────────────
+
+  All commands use the root: /totemaltars  (alias: /ta if configured)
+
+  ┌─────────────────────────────────────────┬─────────────────────────┐
+  │ Command                                  │ Permission              │
+  ├─────────────────────────────────────────┼─────────────────────────┤
+  │ /totemaltars createaltar                 │ totemaltars.admin       │
+  │ /totemaltars removealtar                 │ totemaltars.admin       │
+  │ /totemaltars giveingredient <p> <t> [n]  │ totemaltars.admin       │
+  │ /totemaltars givetotem      <p> <t> [n]  │ totemaltars.admin       │
+  │ /totemaltars reload                      │ totemaltars.admin       │
+  │ /totemaltars altar                       │ totemaltars.use         │
+  └─────────────────────────────────────────┴─────────────────────────┘
+
+  createaltar    — Registers the anvil you're looking at as a Totem Altar.
+  removealtar    — Unregisters the altar anvil you're looking at.
+  giveingredient — Gives a player a crafting ingredient.
+                   Types: blast, shadow, storm, swap, guardian
+                   Amount: 1–64 (optional, defaults to 1)
+  givetotem      — Gives a player a finished custom totem (bypasses crafting).
+                   Types: blast, shadow, storm, swap, guardian
+                   Amount: 1–64 (optional, defaults to 1)
+  reload         — Reloads config.yml without restarting the server.
+  altar          — Shows the nearest Totem Altar's coordinates and distance.
+
+  Tab completion is supported for all subcommands, player names, and types.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  CONFIGURATION  (plugins/TotemAltars/config.yml)
+────────────────────────────────────────────────────────────────────────────────
+
+  GLOBAL COOLDOWN
+    global-cooldown: 15
+      Seconds all totems are locked after any totem pops.
+
+  DROP CHANCES  (drop-chances)
+    blast:    0.10   — Volatile Bone from Wither Skeleton
+    shadow:   0.15   — Shadow Heartwood from Creaking
+    storm:    0.10   — Void Chorus from Enderman (Warped Forest OR during a storm)
+    swap:     0.15   — Fractured Echo from Shulker
+    guardian: 0.15   — Sentinel Eye from Guardian mob
+    Range: 0.0 (never) to 1.0 (always)
+
+  ABILITY TUNING  (abilities)
+    blast.radius               — Knockback sphere radius in blocks
+    blast.knockback-strength   — Velocity multiplier applied to nearby entities
+    shadow.duration-seconds    — Invisibility duration
+    storm.min-distance         — Minimum teleport distance
+    storm.max-distance         — Maximum teleport distance
+    storm.max-attempts         — How many random positions to try before failing
+    swap.range                 — Max distance to find a swap target
+
+  ITEM NAMES  (item-names)
+    Supports & color codes. Keys:
+      volatile-bone, shadow-heartwood, void-chorus, fractured-echo,
+      sentinel-eye, blast-totem, shadow-totem, storm-totem,
+      swap-totem, guardian-totem
+
+  MESSAGES  (messages)
+    Supports & color codes. Placeholder tokens shown in braces.
+    Keys and tokens:
+      global-cooldown-message      {seconds}
+      blast-activated
+      shadow-activated
+      storm-activated
+      swap-activated
+      swap-no-target
+      guardian-activated
+      guardian-ally-teleported     {player}
+      guardian-link-success        {player}
+      guardian-link-success-target {player}
+      guardian-already-linked
+      guardian-target-linked
+      guardian-self-link
+      guardian-not-linked
+      guardian-partner-offline
+      no-safe-location
+      reload-success
+      give-success                 {amount} {item} {player}
+      player-not-found
+      invalid-type
+
+
+────────────────────────────────────────────────────────────────────────────────
+  PLACEHOLDERAPI PLACEHOLDERS
+────────────────────────────────────────────────────────────────────────────────
+
+Requires PlaceholderAPI installed. The expansion registers automatically.
+
+  UNIVERSAL (auto-detects totem held in main or off hand)
+    %totemaltars_cooldown%             — Seconds remaining for held totem
+    %totemaltars_cooldown_bar%         — Progress bar for held totem
+
+  GLOBAL COOLDOWN
+    %totemaltars_cooldown_global%      — Seconds remaining on global cooldown
+    %totemaltars_cooldown_bar_global%  — Progress bar for global cooldown
+
+  EXPLICIT TYPE  (replace <type> with: blast, shadow, storm, swap, guardian)
+    %totemaltars_cooldown_<type>%          — Effective seconds remaining
+    %totemaltars_cooldown_bar_<type>%      — Progress bar
+
+  "Effective" seconds = whichever is higher, global cooldown or per-type.
+  This means the placeholder always reflects when you can actually use it.
+
+  BAR FORMAT
+    §a filled blocks + §7 empty blocks, 10 segments total.
+    Example: §a██████§7████  (60% recovered)
+
+  TAB PLUGIN USAGE
+    TAB reads PAPI placeholders natively. Just use the placeholder string
+    directly in TAB's config files. Example:
+      tablist-name: "%player_name% | %totemaltars_cooldown%s"
+
+
+────────────────────────────────────────────────────────────────────────────────
+  MOB DROP NOTES
+────────────────────────────────────────────────────────────────────────────────
+
+  All drops only trigger on natural kills (player kill, tamed wolf, etc.).
+  Enderman drop (Void Chorus) requires a kill in a Warped Forest biome OR
+  during active thunder/rain — either condition qualifies.
+  Items dropped use custom PDC tags and will not stack with vanilla versions
+  of the same material.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  FILE STRUCTURE
+────────────────────────────────────────────────────────────────────────────────
+
+  plugins/TotemAltars/
+    config.yml      — All tunable settings and messages
+    altars.yml      — Saved altar locations (auto-generated)
+
+  Source layout:
+    commands/   TotemAltarsCommand.java
+    expansion/  TotemAltarsExpansion.java
+    gui/        AltarGUI.java
+    listeners/  AltarListener.java
+                GuardianListener.java
+                MobDropListener.java
+                TotemActivationListener.java
+    managers/   AltarManager.java
+                ConfigManager.java
+                CooldownManager.java
+                ShadowArmorManager.java
+    utils/      ItemUtil.java
+    TotemAltars.java
+
+
+================================================================================
+  END OF GUIDE
+================================================================================
