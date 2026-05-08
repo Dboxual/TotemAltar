@@ -9,6 +9,8 @@ import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
 import com.comphenix.protocol.wrappers.EnumWrappers;
 import com.comphenix.protocol.wrappers.Pair;
+import com.comphenix.protocol.wrappers.WrappedDataValue;
+import com.comphenix.protocol.wrappers.WrappedDataWatcher;
 import com.totemaltars.TotemAltars;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -57,12 +59,15 @@ public class ShadowArmorManager implements Listener {
 
     // Held so we can unregister cleanly on disable
     private final PacketAdapter equipmentAdapter;
+    private final PacketAdapter metadataAdapter;
 
     public ShadowArmorManager(TotemAltars plugin) {
         this.plugin = plugin;
         this.protocolManager = ProtocolLibrary.getProtocolManager();
         this.equipmentAdapter = buildAdapter();
+        this.metadataAdapter = buildMetadataAdapter();
         protocolManager.addPacketListener(equipmentAdapter);
+        protocolManager.addPacketListener(metadataAdapter);
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
@@ -106,6 +111,12 @@ public class ShadowArmorManager implements Listener {
         // Explicit resend so nearby players see armor without waiting for the
         // next server-side equipment broadcast.
         sendArmorPacket(player, false);
+
+        // setInvisible(false) will trigger a natural metadata update for index 0
+        // (entity flags) which restores the fire visual on the next tracker tick.
+        // Arrows and stingers are only re-sent if their count actually changed, so
+        // we must push an explicit restore packet for those.
+        sendRestoreMetadataPacket(player);
     }
 
     /** Called from TotemAltars.onDisable() to guarantee clean shutdown. */
@@ -117,12 +128,14 @@ public class ShadowArmorManager implements Listener {
                 p.setInvisible(false);
                 p.removePotionEffect(PotionEffectType.INVISIBILITY);
                 sendArmorPacket(p, false);
+                sendRestoreMetadataPacket(p);
             }
         }
         activeShadows.clear();
         restoreTasks.values().forEach(BukkitTask::cancel);
         restoreTasks.clear();
         protocolManager.removePacketListener(equipmentAdapter);
+        protocolManager.removePacketListener(metadataAdapter);
     }
 
     // ── Packet adapter ────────────────────────────────────────────────────────────
@@ -160,6 +173,71 @@ public class ShadowArmorManager implements Listener {
         };
     }
 
+    /**
+     * Intercepts ENTITY_METADATA packets for shadowed players and suppresses
+     * three visuals that would otherwise reveal the invisible player:
+     *   index 0  — entity flags byte: clears bit 0x01 (on-fire / flames)
+     *   index 12 — arrows stuck in entity: forced to 0
+     *   index 13 — bee stingers in entity: forced to 0
+     *
+     * The shadowed player always sees their own correct state; only observers
+     * are patched.  Runs on the Netty I/O thread; activeShadows is a
+     * ConcurrentHashMap set so the read is thread-safe.
+     */
+    private PacketAdapter buildMetadataAdapter() {
+        return new PacketAdapter(plugin, ListenerPriority.NORMAL,
+                PacketType.Play.Server.ENTITY_METADATA) {
+            @Override
+            public void onPacketSending(PacketEvent event) {
+                int entityId = event.getPacket().getIntegers().read(0);
+                Player shadowed = findShadowedByEntityId(entityId);
+                if (shadowed == null) return;
+                if (shadowed.equals(event.getPlayer())) return;
+
+                List<WrappedDataValue> original =
+                        event.getPacket().getDataValueCollectionModifier().read(0);
+                if (original == null || original.isEmpty()) return;
+
+                boolean changed = false;
+                List<WrappedDataValue> patched = new ArrayList<>(original.size());
+                for (WrappedDataValue dv : original) {
+                    switch (dv.getIndex()) {
+                        case 0 -> { // entity flags — clear "on fire" bit 0x01
+                            if (dv.getValue() instanceof Byte flags && (flags & 0x01) != 0) {
+                                patched.add(new WrappedDataValue(0, dv.getSerializer(),
+                                        (byte) (flags & ~0x01)));
+                                changed = true;
+                            } else {
+                                patched.add(dv);
+                            }
+                        }
+                        case 12 -> { // arrows in entity
+                            if (dv.getValue() instanceof Integer count && count > 0) {
+                                patched.add(new WrappedDataValue(12, dv.getSerializer(), 0));
+                                changed = true;
+                            } else {
+                                patched.add(dv);
+                            }
+                        }
+                        case 13 -> { // bee stingers in entity
+                            if (dv.getValue() instanceof Integer count && count > 0) {
+                                patched.add(new WrappedDataValue(13, dv.getSerializer(), 0));
+                                changed = true;
+                            } else {
+                                patched.add(dv);
+                            }
+                        }
+                        default -> patched.add(dv);
+                    }
+                }
+
+                if (changed) {
+                    event.getPacket().getDataValueCollectionModifier().write(0, patched);
+                }
+            }
+        };
+    }
+
     // ── Packet helpers ────────────────────────────────────────────────────────────
 
     /**
@@ -180,6 +258,37 @@ public class ShadowArmorManager implements Listener {
                 protocolManager.sendServerPacket(nearby, packet);
             } catch (Exception e) {
                 plugin.getLogger().warning("ShadowArmorManager: failed to send packet to "
+                        + nearby.getName() + " — " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Pushes a corrective ENTITY_METADATA packet to all nearby players when a
+     * shadow expires.  Only arrows (index 12) and bee stingers (index 13) need
+     * an explicit restore — the on-fire flag (index 0) is recovered naturally
+     * when setInvisible(false) marks entity flags dirty on the next tracker tick.
+     */
+    private void sendRestoreMetadataPacket(Player player) {
+        int arrows   = player.getArrowsInBody();
+        int stingers = player.getBeeStingersInBody();
+        if (arrows == 0 && stingers == 0) return;
+
+        WrappedDataWatcher.Serializer intSer = WrappedDataWatcher.Registry.get(Integer.class);
+        List<WrappedDataValue> values = new ArrayList<>(2);
+        if (arrows   > 0) values.add(new WrappedDataValue(12, intSer, arrows));
+        if (stingers > 0) values.add(new WrappedDataValue(13, intSer, stingers));
+
+        PacketContainer packet = protocolManager.createPacket(PacketType.Play.Server.ENTITY_METADATA);
+        packet.getIntegers().write(0, player.getEntityId());
+        packet.getDataValueCollectionModifier().write(0, values);
+
+        for (Player nearby : player.getWorld().getPlayers()) {
+            if (nearby.equals(player)) continue;
+            try {
+                protocolManager.sendServerPacket(nearby, packet);
+            } catch (Exception e) {
+                plugin.getLogger().warning("ShadowArmorManager: failed to send restore metadata to "
                         + nearby.getName() + " — " + e.getMessage());
             }
         }

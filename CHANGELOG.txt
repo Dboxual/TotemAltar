@@ -6,6 +6,28 @@ Format: [version] date — summary of changes
 
 
 ────────────────────────────────────────────────────────────────────────────────
+  [1.0.19]  2026-05-08
+────────────────────────────────────────────────────────────────────────────────
+  Shadow Totem — true invisibility via ProtocolLib metadata interception.
+
+  Problem: setInvisible(true) + Invisibility potion hid the player model and
+  armor, but fire aspect flames, arrows stuck in the body, and bee stingers
+  remained visible, revealing the shadowed player's position.
+
+  Fix (ShadowArmorManager):
+  - Added a second PacketAdapter for ENTITY_METADATA packets.
+  - For every metadata packet sent about a shadowed player to an observer
+    (never to the shadowed player themselves):
+      index 0  (entity flags byte) — bit 0x01 (on-fire / flames) is cleared.
+      index 12 (arrows in entity)  — forced to 0.
+      index 13 (bee stingers)      — forced to 0.
+  - Fire damage is unaffected; only the visual flame render is suppressed.
+  - On shadow end, an explicit ENTITY_METADATA restore packet is sent to
+    nearby players for arrow and stinger counts (fire restores naturally via
+    the metadata update triggered by setInvisible(false)).
+  - Restore is also sent on plugin disable, ensuring no permanent desync.
+
+────────────────────────────────────────────────────────────────────────────────
   [1.0.17]  2026-05-07
 ────────────────────────────────────────────────────────────────────────────────
   Codebase cleanup — no gameplay changes.
