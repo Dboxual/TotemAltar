@@ -32,7 +32,7 @@ public class AltarGUI {
 
     public Inventory buildInventory() {
         Inventory inv = Bukkit.createInventory(null, 27, TITLE);
-        ItemStack filler = makeFiller();
+        ItemStack filler = makePane(Material.GRAY_STAINED_GLASS_PANE, Component.empty());
         for (int i = 0; i < 27; i++) {
             if (i != TOTEM_SLOT && i != INGREDIENT_SLOT && i != OUTPUT_SLOT) {
                 inv.setItem(i, filler);
@@ -58,20 +58,18 @@ public class AltarGUI {
     }
 
     private ItemStack makePlaceholder() {
-        ItemStack item = new ItemStack(Material.RED_STAINED_GLASS_PANE);
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(
+        return makePane(
+                Material.RED_STAINED_GLASS_PANE,
                 Component.text("Place a Totem of Undying + Ingredient")
                         .color(NamedTextColor.GRAY)
                         .decoration(TextDecoration.ITALIC, false));
-        item.setItemMeta(meta);
-        return item;
     }
 
-    private ItemStack makeFiller() {
-        ItemStack item = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(Component.empty());
+    /** Creates a named stained-glass-pane item for use as a GUI element. */
+    private ItemStack makePane(Material material, Component name) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta  meta = item.getItemMeta();
+        meta.displayName(name);
         item.setItemMeta(meta);
         return item;
     }

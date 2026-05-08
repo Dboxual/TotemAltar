@@ -161,7 +161,8 @@ public class TotemAltarsCommand implements CommandExecutor, TabCompleter {
     private void handleGive(CommandSender sender, String[] args, boolean isTotem) {
         String subcmd = isTotem ? "givetotem" : "giveingredient";
         if (args.length < 3) {
-            msg(sender, "&cUsage: /totemaltars " + subcmd + " <player> <blast|shadow|storm|grave> [amount]");
+            msg(sender, "&cUsage: /totemaltars " + subcmd
+                    + " <player> <blast|shadow|storm|swap|guardian> [amount]");
             return;
         }
 
@@ -187,7 +188,10 @@ public class TotemAltarsCommand implements CommandExecutor, TabCompleter {
                 ? plugin.getItemUtil().createTotem(type)
                 : plugin.getItemUtil().createIngredient(type);
         item.setAmount(amount);
-        target.getInventory().addItem(item);
+
+        // Drop any overflow at the player's feet rather than silently discarding it
+        target.getInventory().addItem(item).values()
+                .forEach(overflow -> target.getWorld().dropItemNaturally(target.getLocation(), overflow));
 
         String itemLabel = capitalize(type) + (isTotem ? " Totem" : " Ingredient");
         String feedback = plugin.getConfigManager().getMessage("give-success")
@@ -247,8 +251,8 @@ public class TotemAltarsCommand implements CommandExecutor, TabCompleter {
         if (sender.hasPermission("totemaltars.admin")) {
             msg(sender, "&7  /totemaltars createaltar   &8- Create altar at the anvil you are looking at");
             msg(sender, "&7  /totemaltars removealtar   &8- Remove the altar you are looking at");
-            msg(sender, "&7  /totemaltars giveingredient <player> <blast|shadow|storm|grave> [amount]");
-            msg(sender, "&7  /totemaltars givetotem     <player> <blast|shadow|storm|grave> [amount]");
+            msg(sender, "&7  /totemaltars giveingredient <player> <blast|shadow|storm|swap|guardian> [amount]");
+            msg(sender, "&7  /totemaltars givetotem     <player> <blast|shadow|storm|swap|guardian> [amount]");
             msg(sender, "&7  /totemaltars reload");
         }
         if (sender.hasPermission("totemaltars.use")) {

@@ -1,7 +1,6 @@
 package com.totemaltars.managers;
 
 import com.totemaltars.TotemAltars;
-import org.bukkit.Material;
 
 /**
  * Thin wrapper around Paper's FileConfiguration so every other class
@@ -34,18 +33,6 @@ public class ConfigManager {
 
     public long getGlobalCooldown() {
         return plugin.getConfig().getLong("global-cooldown", 30L);
-    }
-
-    // ── Altar blocks ─────────────────────────────────────────────────────────────
-
-    public Material getAltarMaterial(String type) {
-        String name = plugin.getConfig().getString("altars." + type, "STONE");
-        try {
-            return Material.valueOf(name.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            plugin.getLogger().warning("Invalid altar material for '" + type + "': " + name);
-            return Material.STONE;
-        }
     }
 
     // ── Blast ────────────────────────────────────────────────────────────────────

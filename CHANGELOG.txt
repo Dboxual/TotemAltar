@@ -6,6 +6,36 @@ Format: [version] date — summary of changes
 
 
 ────────────────────────────────────────────────────────────────────────────────
+  [1.0.17]  2026-05-07
+────────────────────────────────────────────────────────────────────────────────
+  Codebase cleanup — no gameplay changes.
+
+  Dead code removed:
+  - Deleted RecipeManager.java (empty class, crafting replaced by Altar GUI).
+  - Removed unreachable capitalize() from TotemActivationListener.
+  - Removed getAltarMaterial() from ConfigManager (read non-existent config key).
+  - Removed unused org.bukkit.Material import from ConfigManager.
+
+  Bug fixes:
+  - /totemaltars giveingredient and givetotem now drop overflow items at the
+    target player's feet instead of silently discarding them on a full inventory.
+  - Command help text corrected: "grave" replaced with "blast|shadow|storm|swap|guardian"
+    (appeared on lines 164, 250, 251 of TotemAltarsCommand).
+
+  PlaceholderAPI expansion:
+  - Fixed deprecated getDescription().getVersion() → getPluginMeta().getVersion().
+  - Added all six placeholders documented in the guide:
+      %totemaltars_cooldown_global%
+      %totemaltars_cooldown_bar_global%
+      %totemaltars_cooldown_<type>%   (blast/shadow/storm/swap/guardian)
+      %totemaltars_cooldown_bar_<type>%
+    All reflect the single global cooldown (one cooldown system).
+
+  AltarGUI refactor:
+  - Extracted makePane(Material, Component) helper; makeFiller and makePlaceholder
+    now share it instead of duplicating ItemMeta boilerplate.
+
+────────────────────────────────────────────────────────────────────────────────
   [1.0.16]  2026-05-07
 ────────────────────────────────────────────────────────────────────────────────
   Update compatibility — servers can now update by replacing only the jar.
