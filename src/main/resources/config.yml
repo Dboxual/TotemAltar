@@ -1,6 +1,8 @@
 # ============================================================
 #  TotemAltars Configuration
 # ============================================================
+# config-version is managed automatically — do not edit it.
+config-version: 1
 
 # Drop chances per totem type (0.0 = never, 1.0 = always)
 drop-chances:

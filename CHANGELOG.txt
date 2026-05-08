@@ -6,6 +6,44 @@ Format: [version] date — summary of changes
 
 
 ────────────────────────────────────────────────────────────────────────────────
+  [1.0.16]  2026-05-07
+────────────────────────────────────────────────────────────────────────────────
+  Update compatibility — servers can now update by replacing only the jar.
+
+  ConfigMigrator (new):
+  - config-version key added to config.yml (current: v1).
+  - On startup, detects old config versions and automatically adds missing keys
+    with safe defaults; user-set values are never overwritten.
+  - Renames keys that changed in prior updates:
+      item-names.storm-pearl     → item-names.void-chorus
+      item-names.mirrored-shard  → item-names.fractured-echo
+      item-names.guardian-crystal → item-names.sentinel-eye
+  - Reports all migration actions to the server log.
+
+  ItemMigrationListener (new):
+  - On player login, scans the full inventory (main, armor, off-hand).
+  - Detects ingredient items whose material changed in an update (e.g. old
+    Storm Pearl ENDER_PEARL → current Void Chorus CHORUS_FRUIT).
+  - Replaces outdated items with the current version; stack size preserved.
+  - Logs each migrated item and notifies the player in chat.
+  - If a type is unknown, logs a warning rather than silently discarding.
+
+  ConfigManager fixes:
+  - getStormMinDistance() / getStormMaxDistance() fallback defaults corrected
+    to 25 / 35 (were still reading 50 / 75 from the old code path).
+  - Added getConfigVersion() helper.
+
+  TotemAltars startup:
+  - Removed aggressive config.yml deletion on invalid config; migration now
+    handles all repair scenarios without data loss.
+  - Version now logged on enable using getPluginMeta() (fixes deprecation).
+
+  README:
+  - Added Updating section explaining jar-replace workflow.
+  - Documents what NOT to delete between updates.
+  - Explains migration log messages as normal/expected.
+
+────────────────────────────────────────────────────────────────────────────────
   [1.0.15]  2026-05-06
 ────────────────────────────────────────────────────────────────────────────────
   Visual identity redesign — all five totems updated for consistency and

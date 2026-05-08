@@ -20,6 +20,10 @@ public class ConfigManager {
         plugin.reloadConfig();
     }
 
+    public int getConfigVersion() {
+        return plugin.getConfig().getInt("config-version", 0);
+    }
+
     // ── Drop chances ────────────────────────────────────────────────────────────
 
     public double getDropChance(String type) {
@@ -55,8 +59,8 @@ public class ConfigManager {
 
     // ── Storm ────────────────────────────────────────────────────────────────────
 
-    public double getStormMinDistance()  { return plugin.getConfig().getDouble("abilities.storm.min-distance",  50.0); }
-    public double getStormMaxDistance()  { return plugin.getConfig().getDouble("abilities.storm.max-distance",  75.0); }
+    public double getStormMinDistance()  { return plugin.getConfig().getDouble("abilities.storm.min-distance",  25.0); }
+    public double getStormMaxDistance()  { return plugin.getConfig().getDouble("abilities.storm.max-distance",  35.0); }
     public int    getStormMaxAttempts()  { return plugin.getConfig().getInt   ("abilities.storm.max-attempts",   50);  }
 
     // ── Swap ─────────────────────────────────────────────────────────────────────

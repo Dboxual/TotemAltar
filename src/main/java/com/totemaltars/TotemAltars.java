@@ -5,16 +5,16 @@ import com.totemaltars.expansion.TotemAltarsExpansion;
 import com.totemaltars.gui.AltarGUI;
 import com.totemaltars.listeners.AltarListener;
 import com.totemaltars.listeners.GuardianListener;
+import com.totemaltars.listeners.ItemMigrationListener;
 import com.totemaltars.listeners.MobDropListener;
 import com.totemaltars.listeners.TotemActivationListener;
 import com.totemaltars.managers.AltarManager;
 import com.totemaltars.managers.ConfigManager;
+import com.totemaltars.managers.ConfigMigrator;
 import com.totemaltars.managers.CooldownManager;
 import com.totemaltars.managers.ShadowArmorManager;
 import com.totemaltars.utils.ItemUtil;
 import org.bukkit.plugin.java.JavaPlugin;
-
-import java.io.File;
 
 public class TotemAltars extends JavaPlugin {
 
@@ -31,14 +31,10 @@ public class TotemAltars extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
+        // Write defaults for keys that don't exist yet, then migrate old configs.
+        // This never overwrites keys the server owner has already set.
         saveDefaultConfig();
-
-        if (!getConfig().isConfigurationSection("drop-chances")) {
-            getLogger().warning("config.yml appears invalid or empty — replacing with defaults.");
-            new File(getDataFolder(), "config.yml").delete();
-            saveDefaultConfig();
-            reloadConfig();
-        }
+        ConfigMigrator.migrate(this);
 
         configManager      = new ConfigManager(this);
         cooldownManager    = new CooldownManager();
@@ -49,8 +45,9 @@ public class TotemAltars extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(new MobDropListener(this),         this);
         getServer().getPluginManager().registerEvents(new TotemActivationListener(this), this);
-        getServer().getPluginManager().registerEvents(new AltarListener(this),            this);
+        getServer().getPluginManager().registerEvents(new AltarListener(this),           this);
         getServer().getPluginManager().registerEvents(new GuardianListener(this),        this);
+        getServer().getPluginManager().registerEvents(new ItemMigrationListener(this),   this);
         getServer().getPluginManager().registerEvents(altarManager,                      this);
 
         TotemAltarsCommand cmd = new TotemAltarsCommand(this);
@@ -62,7 +59,7 @@ public class TotemAltars extends JavaPlugin {
             getLogger().info("PlaceholderAPI expansion registered.");
         }
 
-        getLogger().info("TotemAltars enabled.");
+        getLogger().info("TotemAltars v" + getPluginMeta().getVersion() + " enabled.");
     }
 
     @Override
