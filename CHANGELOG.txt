@@ -6,6 +6,17 @@ Format: [version] date — summary of changes
 
 
 ────────────────────────────────────────────────────────────────────────────────
+  [1.0.20]  2026-05-08
+────────────────────────────────────────────────────────────────────────────────
+  Swap Totem — target selection changed from nearest to random.
+
+  Previously the Swap Totem always picked the closest valid player in range.
+  Now it collects all valid players within the configured range (default 25
+  blocks) and selects one at random.  All other rules are unchanged: the caster
+  is excluded, spectators are excluded, and the "no target" message fires when
+  no valid players are in range.
+
+────────────────────────────────────────────────────────────────────────────────
   [1.0.19]  2026-05-08
 ────────────────────────────────────────────────────────────────────────────────
   Shadow Totem — true invisibility via ProtocolLib metadata interception.

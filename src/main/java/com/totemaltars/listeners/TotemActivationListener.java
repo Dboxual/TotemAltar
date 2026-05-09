@@ -16,7 +16,9 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
@@ -194,23 +196,21 @@ public class TotemActivationListener implements Listener {
         double range = plugin.getConfigManager().getSwapRange();
         double rangeSq = range * range;
 
-        Player target = null;
-        double minDist = Double.MAX_VALUE;
-
+        List<Player> candidates = new ArrayList<>();
         for (Player other : player.getWorld().getPlayers()) {
             if (other.equals(player)) continue;
             if (other.getGameMode() == GameMode.SPECTATOR) continue;
-            double dist = player.getLocation().distanceSquared(other.getLocation());
-            if (dist <= rangeSq && dist < minDist) {
-                minDist = dist;
-                target = other;
+            if (player.getLocation().distanceSquared(other.getLocation()) <= rangeSq) {
+                candidates.add(other);
             }
         }
 
-        if (target == null) {
+        if (candidates.isEmpty()) {
             actionBar(player, plugin.getConfigManager().getMessage("swap-no-target"));
             return;
         }
+
+        Player target = candidates.get(new Random().nextInt(candidates.size()));
 
         Location playerLoc = player.getLocation().clone();
         Location targetLoc = target.getLocation().clone();
