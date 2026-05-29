@@ -4,37 +4,19 @@ plugins {
 
 group = 'com.totemaltars'
 
-// ── Auto-versioning ───────────────────────────────────────────────────────────
-// version.properties stores the authoritative patch number.
-// Every `gradle jar` run bumps the patch and writes it back.
+// ── Versioning ────────────────────────────────────────────────────────────────
+// version.properties holds the base version. Edit it manually to bump.
+// Pass -Psuffix=beta (or any label) to append a suffix without touching the file.
+//   gradle jar              → TotemAltars-1.0.21.jar
+//   gradle jar -Psuffix=debug  → TotemAltars-1.0.21-debug.jar
 
 def versionFile = file('version.properties')
-
-// Read current version at configuration time so it's available everywhere
-def loadVersion = {
-    def p = new Properties()
-    versionFile.withInputStream { p.load(it) }
-    return p.getProperty('version', '1.0.4')
-}
-version = loadVersion()
-
-tasks.register('incrementVersion') {
-    doFirst {
-        def p = new Properties()
-        versionFile.withInputStream { p.load(it) }
-        def old   = p.getProperty('version', '1.0.4')
-        def parts = old.tokenize('.')
-        def next  = "${parts[0]}.${parts[1]}.${parts[2].toInteger() + 1}"
-        p.setProperty('version', next)
-        versionFile.withOutputStream { p.store(it, null) }
-        project.version = next
-        logger.lifecycle("TotemAltars version: ${old} → ${next}")
-    }
-}
-
-// Both resource processing and compilation must see the new version
-processResources.dependsOn incrementVersion
-compileJava.dependsOn     incrementVersion
+def props = new Properties()
+versionFile.withInputStream { props.load(it) }
+def baseVersion = props.getProperty('version', '1.0.0')
+def suffix      = project.hasProperty('suffix') ? "-${project.property('suffix')}" : ''
+version = baseVersion + suffix
+logger.lifecycle("TotemAltars version: ${version}")
 
 // ── Java ──────────────────────────────────────────────────────────────────────
 java {
