@@ -25,4 +25,11 @@ target/
 # Logs
 *.log
 
+# Claude Code local project settings (machine-specific)
+.claude/
+
+# Internal AI-generated investigation/audit reports (not plugin documentation)
+*-Recovery-Report.txt
+*-Audit.txt
+
 # Note: gradlew and gradle/wrapper/ are intentionally tracked
