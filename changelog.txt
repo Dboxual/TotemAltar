@@ -1,0 +1,658 @@
+================================================================================
+TotemAltars — Changelog
+================================================================================
+
+[1.1.23] — 2026-06-13
+----------------------
+CHANGED: Shard kill progress now only counts when the shard is held in the offhand.
+
+  Previous behaviour:
+    AffinityListener scanned the offhand first, then fell through to scan slots
+    0–8 (the hotbar) if no shard was found in the offhand. This meant kills could
+    accumulate on a shard sitting anywhere in the hotbar, not just the offhand.
+
+  New behaviour:
+    Only the offhand slot is checked. If no valid unmorphed Totem Shard is in the
+    offhand, the kill is ignored for shard progression. Hotbar scanning removed.
+
+  Also updated:
+    - Guide book text updated from "Keep one in your hotbar" to
+      "Hold one in your offhand" to match the new requirement.
+
+FILES: AffinityListener.java, ItemUtil.java, build.gradle.kts, plugin.yml
+
+--------------------------------------------------------------------------------
+
+[1.1.20] — 2026-06-12
+----------------------
+FIXED: Shadow Totem no longer reveals a burning player via visible fire.
+
+  Root cause:
+    Setting a player invisible hides their model but NOT their fire ticks.
+    A player burning from Fire Aspect, lava, flame arrows, or any other source
+    would still display visible flames to nearby players even while the Shadow
+    Totem invisibility was active, negating stealth.
+
+  Fix — three-layer approach:
+
+    1. Extinguish on activation (TotemActivationListener.doShadow):
+       player.setFireTicks(0) is called immediately when the totem pops,
+       before the INVISIBILITY effect and ShadowArmorManager.startShadow().
+       Any active burn is cleared at the instant of activation.
+
+    2. Cancel re-ignition during shadow (ShadowArmorManager, EntityCombustEvent):
+       A HIGH-priority EntityCombustEvent handler cancels all combustion events
+       (fire aspect, lava, flame arrows, campfires, etc.) for any player currently
+       in shadow. The player cannot be set on fire again while stealth is active.
+
+    3. Periodic enforcement (ShadowArmorManager, enforceAllShadows):
+       The existing 1-second enforcement task that re-sends empty armor packets
+       now also resets fire ticks to 0 for each shadow player who has them.
+       This covers edge cases where combustion fires before the event handler.
+
+  Scope:
+    EntityCombustEvent suppression also prevents fire damage during shadow,
+    which is consistent with the intent: full stealth and concealment.
+    No other totem or mechanic is affected.
+
+  Confirmed clean from previous audit:
+    Shadow Totem has no FLAME or FIRE particles (only SMOKE at activation).
+    No arrow or projectile effects exist in doShadow or ShadowArmorManager.
+
+FILES: TotemActivationListener.java,
+       ShadowArmorManager.java,
+       plugin.yml, build.gradle.kts,
+       changelog.txt, chatgpt.txt
+
+--------------------------------------------------------------------------------
+
+[1.1.19] — 2026-06-12
+----------------------
+FIXED: Bedrock Relic items placed as blocks no longer lose their plugin data.
+
+  Root cause:
+    The Bedrock Relic and Activated Bedrock Relic items use GILDED_BLACKSTONE as
+    their base material, which is a fully placeable vanilla block. When a player
+    placed the item, Minecraft created a standard GILDED_BLACKSTONE block with no
+    way to attach PDC data (GILDED_BLACKSTONE has no TileState). On break, the
+    block dropped as a plain GILDED_BLACKSTONE item with no relic PDC tags.
+
+  Solution — plugin-side coordinate storage:
+    A new BedrockRelicBlockManager stores a persistent map of placed relic block
+    locations in bedrock_relic_blocks.yml (world:x:y:z → activated status).
+    The map survives plugin restarts; entries are removed when blocks are broken.
+
+  BlockPlaceEvent (BedrockRelicPlacementListener):
+    When a Bedrock Relic or Activated Bedrock Relic item is placed, the block
+    location and activated state are registered in BedrockRelicBlockManager.
+
+  BlockBreakEvent:
+    When a registered relic block is broken:
+      - Vanilla drops are suppressed (setDropItems false, setExpToDrop 0).
+      - The correct relic variant (inactive or activated) is dropped as a
+        naturally-falling item at the block position.
+      - In creative mode the block is removed without any drop (matches vanilla
+        creative behavior).
+
+  EntityExplodeEvent / BlockExplodeEvent:
+    Relic blocks in explosion block lists are removed from the list (preventing
+    vanilla TNT/creeper drops), destroyed manually (setType AIR), and the proper
+    relic item is always dropped — exactly one item, no duplication.
+
+  BlockPistonExtendEvent / BlockPistonRetractEvent:
+    Pistons cannot push or pull tracked relic blocks. The event is cancelled to
+    prevent coordinate desync between the block position and the storage map.
+
+FILES: BedrockRelicBlockManager.java (new),
+       BedrockRelicPlacementListener.java (new),
+       ItemUtil.java (createRelicDrop helper),
+       TotemAltars.java,
+       plugin.yml, build.gradle.kts,
+       changelog.txt, chatgpt.txt
+
+--------------------------------------------------------------------------------
+
+[1.1.18] — 2026-06-12
+----------------------
+CHANGED: Swap Totem now targets nearby mobs in addition to players.
+
+  Previously the Swap Totem only swapped the user with another online player.
+  It now builds a shared pool of all valid targets — players AND living mobs —
+  and picks one at random with equal probability.
+
+  Target selection:
+    - Collects all valid players within 25 blocks first, then all valid living
+      mobs within 25 blocks, into one flat list.
+    - Picks a single target with ThreadLocalRandom — uniform distribution across
+      the entire pool (e.g. 1 player + 9 mobs = 10 candidates each at 1/10 odds).
+    - Distance does NOT affect selection weight. The closest entity is not
+      preferred. The entity in front of the player is not preferred.
+
+  Valid mob targets:
+    - Any LivingEntity that is not a Player, not an ArmorStand, not dead, and
+      does not have a custom name / nametag set.
+    - Named entities (name-tagged pets, villagers, quest mobs, named altar mobs,
+      etc.) are excluded entirely — this prevents accidental swaps with
+      intentionally preserved mobs.
+
+  Valid player targets (unchanged):
+    - Online, non-spectator players within 25 blocks, excluding self.
+
+  Fallback (unchanged):
+    - If no valid targets exist the existing "swap-no-target" message is shown.
+
+  Swap mechanics (unchanged):
+    - Locations are exchanged, yaw/pitch preserved for each party.
+    - Existing particles, sounds, messages, and cooldowns are all unchanged.
+    - The action-bar notification ("You were swapped by X!") is now only sent
+      when the target is a Player (mobs don't have action bars).
+
+FILES: TotemActivationListener.java,
+       plugin.yml, build.gradle.kts,
+       changelog.txt, chatgpt.txt
+
+--------------------------------------------------------------------------------
+
+[1.1.17] — 2026-06-12
+----------------------
+FIXED: Shadow Totem no longer leaks armor to nearby players while stealth is active.
+
+  The prior implementation applied Invisibility but did not hide the player's
+  equipped armor from other clients. Nearby players could still see the hidden
+  player's armor pieces even while fully invisible.
+
+  Solution — packet-level fake equipment:
+    - On shadow start: sends fake AIR equipment for helmet/chestplate/leggings/boots
+      to every online viewer (packet-only; the hidden player's real inventory is
+      untouched throughout).
+    - On shadow end: sends the player's real equipment back to every online viewer
+      so armor reappears instantly without any desync.
+    - Held items are unaffected (follows existing intended design — not hidden).
+
+  Edge cases handled:
+    - Player joins while someone is hidden → PlayerJoinEvent sends fake equipment
+      for all active shadows to the newcomer.
+    - Player changes armor while hidden → PlayerArmorChangeEvent re-enforces fake
+      empty armor on the next tick (avoids a brief flash of real armor).
+    - Plugin disable → real equipment restored to all viewers before state is cleared.
+    - A periodic 1-second enforcement task re-sends empty armor to all viewers,
+      covering players who enter render range while someone is hidden.
+
+  Implementation: ShadowArmorManager now uses Paper API
+  Player#sendEquipmentChange(LivingEntity, Map<EquipmentSlot, ItemStack>) —
+  no external packet library required.
+
+ADDED: Admin command to give a pre-repaired (finished) altar item.
+
+  /totemaltars givefinishedaltar <player> [amount]
+
+  - Gives an ANVIL-based altar item with the standard totemaltars:totem_altar
+    PDC tag plus a new totemaltars:totem_altar_active PDC flag.
+  - When placed, the altar skips the repair ritual and registers immediately
+    at stage=1 (active/repaired) — hologram shows "✦ INSERT SHARD ✦" straight away.
+  - All subsequent forging steps (shard insert → totem insert → claim) work
+    identically to a normally repaired altar.
+  - Item name, enchant glow, and PDC tag are consistent with givealtar.
+  - Amount clamped 1–64, defaults to 1. Overflow drops at player's feet.
+  - Tab completion: arg 1 = online player names, arg 2 = amounts (same as givealtar).
+  - Permission: totemaltars.admin.
+
+FILES: ShadowArmorManager.java,
+       ItemUtil.java,
+       AltarPlacementListener.java,
+       TotemAltarsCommand.java,
+       config.yml, plugin.yml, build.gradle.kts,
+       changelog.txt, chatgpt.txt
+
+--------------------------------------------------------------------------------
+
+[1.1.16] — 2026-06-12
+----------------------
+ADDED: Admin command to give forged totems directly for testing.
+
+  /totemaltars givetotem <player> <blast|shadow|storm|swap|guardian|all> [amount]
+
+  - Each specific type gives the exact same item produced by the altar forging
+    flow: TOTEM_OF_UNDYING base, correct display name from config item-names,
+    correct lore, UNBREAKING glow, and the totemaltars:legacy_totem_type PDC tag
+    set to the given type. Items behave identically to naturally forged totems.
+  - "all" gives 1 of each type (blast, shadow, storm, swap, guardian) in one
+    command — overflow drops at the player's feet if inventory is full.
+  - Amount is clamped to 1–64 and defaults to 1.
+  - Tab completion: arg 1 = online player names, arg 2 = totem types,
+    arg 3 = common amounts (1/4/8/16/32/64), suppressed for "all".
+  - Permission: totemaltars.admin (same as all other admin commands).
+
+FILES: TotemAltarsCommand.java,
+       plugin.yml, build.gradle.kts,
+       changelog.txt, chatgpt.txt
+
+--------------------------------------------------------------------------------
+
+[1.1.15] — 2026-06-11
+----------------------
+ADDED: Legacy ingredient cleanup for old pre-shard-system TotemAltar ingredients.
+
+  The cleanup removes only the five old ingredient items:
+    - blast:    BONE,        "Volatile Bone"
+    - shadow:   PALE_OAK_LOG, "Shadow Heartwood"
+    - storm:    CHORUS_FRUIT, "Void Chorus"
+    - swap:     ECHO_SHARD,   "Fractured Echo"
+    - guardian: ENDER_EYE,    "Sentinel Eye"
+
+  Exact legacy identifiers detected:
+    - PDC key `totemaltars:ingredient_type` with value `blast`, `shadow`,
+      `storm`, `swap`, or `guardian`.
+    - Exact old display name, exact material, and exact old lore:
+      "A bone crackling with unstable energy." / "Dropped by Wither Skeletons." / "Bring to a Totem Altar."
+      "Wood that pulses with pale darkness." / "Dropped by Creakings." / "Bring to a Totem Altar."
+      "A chorus fruit twisted by the void's will." / "Dropped by Endermen in storms or warped forests." / "Bring to a Totem Altar."
+      "A shard that remembers where you were." / "Dropped by Shulkers." / "Bring to a Totem Altar."
+      "An eye that never stops watching over the linked." / "Dropped by Guardians." / "Bring to a Totem Altar."
+
+ADDED: Cleanup runs on plugin enable for online players and, when enabled,
+       currently loaded tile inventories.
+ADDED: Join cleanup rescans player inventory, armor, offhand, and ender chest.
+ADDED: Chunk-load cleanup scans tile inventories in loaded chunks over time.
+ADDED: Shulker-box contents inside player/container inventories are scanned when
+       `legacy-cleanup.scan-shulker-contents` is true.
+ADDED: Admin commands:
+    /totemaltars purgelegacy <player>
+    /totemaltars purgelegacy all
+    /totemaltars purgelegacy loaded
+ADDED: Config:
+    legacy-cleanup:
+      enabled: true
+      on-enable-loaded-containers: true
+      on-player-join: true
+      on-chunk-load: true
+      scan-shulker-contents: true
+      log-removals: true
+REMOVED: Legacy ingredient mob-drop listener and unused ingredient construction
+         path, so the old ingredients are no longer generated.
+REMOVED: Stale legacy ingredient config names/drop chances.
+ADDED: Startup removal of any keyed recipe whose result matches a legacy
+       ingredient signature, if such a recipe is present during reload/load.
+
+FILES: TotemAltars.java,
+       TotemAltarsCommand.java,
+       LegacyIngredientCleanup.java,
+       ConfigManager.java,
+       ItemUtil.java,
+       LegacyIngredientDropListener.java (deleted),
+       config.yml, plugin.yml, build.gradle.kts,
+       changelog.txt, chatgpt.txt
+
+--------------------------------------------------------------------------------
+
+[1.1.14] — 2026-06-11
+----------------------
+CHANGED: Bedrock Relic binding no longer permanently unlocks a Totem Altar.
+CHANGED: Activated Bedrock Relic binding now runs the boss bar sequence, then immediately opens the BedRocker enchanting GUI.
+CHANGED: One Activated Bedrock Relic now produces exactly one BedRocker enchantment when inserted with a Netherite Pickaxe.
+REMOVED: AltarManager bedrockEnabled state, set/get methods, and altars.yml `bedrock-enabled` persistence.
+ADDED: Configurable BedRocker Bedrock destruction durability cost: `bedrock-relic.durability-cost` (default 100).
+ADDED: Bedrock breaking is cancelled before block removal if the BedRocker pickaxe has less than the configured durability cost remaining.
+ADDED: `/totemaltars givebedrockrelic <player>` admin command for testing/admin use.
+ADDED: Busy-altar guard so Bedrock Relic binding does not interrupt an altar awaiting/holding a forged totem.
+CHANGED: config.yml gains messages for Bedrock Relic admin give success and insufficient BedRocker durability.
+
+  CURRENT BEDROCK RELIC PROGRESSION
+  ──────────────────────────────────
+  Step 1 — Find a Bedrock Relic in a Bastion Remnant chest, or give one with:
+    /totemaltars givebedrockrelic <player>
+
+  Step 2 — Activate the relic on a Bedrock block.
+    Right-click Bedrock while holding the inactive relic.
+    The item becomes an Activated Bedrock Relic.
+
+  Step 3 — Return the Activated Bedrock Relic to a repaired Totem Altar.
+    Right-click an active altar while holding the activated relic.
+    The binding sequence runs.
+    Altars already waiting for a Totem of Undying or claim are treated as busy.
+
+  Step 4 — Insert the same Activated Bedrock Relic and a Netherite Pickaxe.
+    When binding completes, the BedRocker GUI opens immediately.
+    Confirming consumes exactly 1 Activated Bedrock Relic and applies BedRocker.
+
+  Step 5 — Break Bedrock.
+    A BedRocker pickaxe breaks Bedrock after the configured countdown.
+    On successful destruction, the configured extra durability cost is applied.
+    If the pickaxe cannot pay the cost, the break is cancelled and Bedrock remains.
+
+  CONFIGURATION (bedrock-relic section)
+  ───────────────────────────────────────
+  spawn-chance: 0.03
+  break-ticks: 100
+  binding-ticks: 100
+  durability-cost: 100
+
+FILES: BedrockRelicListener.java,
+       BedrockBreakListener.java,
+       TotemAltarsCommand.java,
+       AltarManager.java, ConfigManager.java,
+       config.yml, plugin.yml, build.gradle.kts,
+       changelog.txt, chatgpt.txt
+
+--------------------------------------------------------------------------------
+
+[1.1.13] — 2026-06-10
+----------------------
+ADDED: Bedrock Relic — new progression item found in Bastion Remnant loot chests.
+ADDED: Activated Bedrock Relic — inactive relic transformed by right-clicking a Bedrock block.
+ADDED: Altar Binding Sequence — 5-second boss bar ritual that empowers a Totem Altar to enchant pickaxes.
+ADDED: BedRocker Enchantment — custom enchantment applied to a Netherite Pickaxe via a bedrock-enabled altar.
+ADDED: Bedrock Mining — BedRocker pickaxe can break Bedrock after a 5-second countdown; block becomes Air (no drop).
+ADDED: BedRocker Enchanting GUI — opens when right-clicking a bedrock-enabled altar at stage 1.
+ADDED: BedrockRelicListener, BedrockBreakListener, BedrockRelicLootListener (3 new listener classes).
+CHANGED: AltarManager.AltarEntry now stores a `bedrockEnabled` boolean field; altars.yml gains an optional `bedrock-enabled` key.
+CHANGED: config.yml gains a `bedrock-relic` section with spawn-chance, break-ticks, and binding-ticks.
+CHANGED: config.yml gains 9 new messages under the `bedrock-*` keys.
+
+  BEDROCK RELIC PROGRESSION OVERVIEW
+  ────────────────────────────────────
+  Step 1 — Find a Bedrock Relic in a Bastion Remnant chest.
+    Loot tables: chests/bastion_bridge, bastion_hoglin_stable,
+                 bastion_other, bastion_treasure
+    Default spawn chance: 3% per chest.
+    Item: Gilded Blackstone base material with enchant glow.
+
+  Step 2 — Activate the relic on a Bedrock block.
+    Right-click any Bedrock block while holding the inactive relic.
+    Relic transforms in-hand into Activated Bedrock Relic.
+    Message: "The relic resonates with the foundation of the world."
+    Message: "Return it to a Totem Altar."
+
+  Step 3 — Bind the Activated Relic to a repaired Totem Altar.
+    Right-click an ACTIVE altar (stage ≥ 1) holding the Activated Bedrock Relic.
+    5-second binding countdown with boss bar and flame/portal particles.
+    At completion: relic is consumed, altar becomes bedrock-enabled.
+    Message: "The altar has accepted the Bedrock Relic."
+    Effect: lightning strike + TOTEM_OF_UNDYING particles + beacon sound.
+    The bedrock-enabled flag persists in altars.yml across restarts.
+    Binding cost: 1 Activated Bedrock Relic per altar (one-time per altar).
+
+  Step 4 — Enchant a Netherite Pickaxe via the BedRocker GUI.
+    Right-click a bedrock-enabled altar at stage 1 (any held item except a typed shard).
+    GUI opens: "BedRocker Enchanting" — 27 slots.
+      Slot 11: place Activated Bedrock Relic
+      Slot 15: place Netherite Pickaxe
+      Slot 13: click the Nether Star confirm button to process.
+    Relic is consumed; pickaxe gains BedRocker lore and PDC tag.
+    Normal forge flow (shard insert, totem insert, claim) continues to work
+    on bedrock-enabled altars — the GUI only opens for non-shard/non-relic clicks.
+    Enchanting cost: 1 Activated Bedrock Relic per pickaxe.
+
+  Step 5 — Mine Bedrock.
+    Left-click a Bedrock block with a BedRocker Netherite Pickaxe.
+    5-second countdown (configurable via break-ticks) shown on action bar.
+    Each second: BLOCK_STONE_HIT sound.
+    If you move more than 7 blocks from the block or swap tools: cancelled.
+    On completion: block becomes Air. No bedrock item drops.
+    Effect: lightning, ENTITY_GENERIC_EXPLODE sound, smoke particles.
+
+  ANTI-ABUSE NOTES
+  ─────────────────
+  - Bedrock does not drop as an item — ever. Only becomes Air.
+  - Each altar binding is one-time and persisted; cannot be repeated.
+  - Enchanting consumes 1 Activated Relic per pickaxe enchant.
+  - Mining countdown cancels if the player moves away or changes tools.
+  - Two players cannot bind the same altar simultaneously.
+
+  CONFIGURATION (bedrock-relic section)
+  ───────────────────────────────────────
+  spawn-chance: 0.03    # Relic drop chance in bastion chests (0.0–1.0)
+  break-ticks: 100      # Ticks to mine bedrock (100 = 5 seconds)
+  binding-ticks: 100    # Ticks for altar binding sequence
+
+FILES: BedrockRelicListener.java (new),
+       BedrockBreakListener.java (new),
+       BedrockRelicLootListener.java (new),
+       ItemUtil.java, AltarManager.java, ConfigManager.java,
+       TotemAltars.java, config.yml, plugin.yml, build.gradle.kts
+
+--------------------------------------------------------------------------------
+
+[1.1.12] — 2026-06-10
+----------------------
+CHANGED: Forging GUI removed from restored altars; all post-restoration steps are now hand-based right-clicks.
+CHANGED: Active altar hologram updated from "✦ RESTORED ALTAR ✦" to "✦ INSERT SHARD ✦" to guide players.
+ADDED: config message forge-needs-shard (shown when right-clicking a restored altar without a valid typed shard).
+
+  Forging flow (v1.1.12):
+    Stage 0 (broken altar):
+      Right-click → Repair GUI opens (unchanged). Place Wither Skull in slot 13 to start the ritual.
+
+    Stage 1 (restored, waiting for shard):
+      Right-click with a morphed/typed Totem Shard in main hand:
+        → 1 shard consumed from the stack.
+        → Shard ItemDisplay appears above altar.
+        → Hologram updates to "⚡ INSERT TOTEM ⚡".
+        → Message: forge-insert-totem.
+        → Altar enters stage 2.
+      Right-click with any other item (or empty hand):
+        → Message: forge-needs-shard. No state change.
+
+    Stage 2 (shard inserted, waiting for vanilla Totem of Undying):
+      Right-click with vanilla Totem of Undying in main hand:
+        → Totem consumed, forging effects fire (lightning, particles, beacon sound).
+        → Hologram updates to "✦ CLAIM YOUR TOTEM ✦".
+        → Altar enters stage 3. (unchanged from 1.1.8+)
+
+    Stage 3 (forged totem sitting on altar):
+      Right-click (no item required):
+        → Only the inserting player (owner UUID) can claim.
+        → Forged typed totem given to player (overflow drops at feet).
+        → Altar resets to stage 1. (unchanged from 1.1.8+)
+
+  What was removed:
+    - openForgingGUI(), checkForgingSlot(), forgingGUILocs, forgingGUIInvs maps.
+    - The forging branch of onInventoryClick / onInventoryClose.
+    - All GUI event handlers for the forging flow.
+
+  What was kept unchanged:
+    - Repair GUI (Wither Skull → ritual start), including cleanup on close.
+    - handleTotemClick (stage 2 → 3), handleTotemReadyClaim (stage 3 → 1).
+    - forgingInProgress lock (now guards shard insertion + totem insertion + claim).
+    - giveItem overflow-drop helper.
+
+FILES: AltarInteractionListener.java, ConfigManager.java, config.yml,
+       build.gradle.kts, plugin.yml
+
+--------------------------------------------------------------------------------
+
+[1.1.11] — 2026-06-10
+----------------------
+CHANGED: Broken altar hologram label updated to "✦ BROKEN ALTAR ✦" (remains red &c).
+CHANGED: Shard drop chance default lowered from 5% to 1%.
+ADDED: Per-shard unique UUID stored in PDC (totemaltars:shard_uuid) — prevents stacking.
+
+  Altar hologram color by state:
+    The inactive (unrepaired) altar hologram text is now "✦ BROKEN ALTAR ✦" in red
+    (&c), making the broken state self-describing. The restored altar hologram is
+    unchanged ("✦ RESTORED ALTAR ✦" in aqua &b). The config key inactive-text in
+    config.yml defaults to the new label; existing servers can update it manually.
+
+  Shard drop rate:
+    Default shard.drop-chance lowered from 0.05 (5%) to 0.01 (1%).
+    Existing servers that already have drop-chance set in their config.yml are
+    NOT affected (copyDefaults only fills missing keys). David should manually
+    update the live config if desired. The ConfigManager Java-side fallback was
+    also updated to 0.01.
+
+  Shard unique UUID (anti-stack):
+    Every Totem Shard now carries a unique UUID in its PDC under the key
+    totemaltars:shard_uuid. Since Minecraft only stacks items with identical NBT,
+    this guarantees each shard is a distinct, non-stackable item.
+
+    createShard(): UUID written into the initial PDC block (one setItemMeta pass).
+    ensureShardUuid(ItemStack): new public method — assigns UUID only if absent,
+      never overwrites. Called lazily from updateShardLore() and morphShard() so
+      all old shards get a UUID the next time they receive any affinity progress.
+    Old Echo Shard or Amethyst Shard-based shards with no UUID are safe — their
+    affinity, lore, and type data are untouched; they simply gain the UUID tag.
+
+FILES: ItemUtil.java, ConfigManager.java, config.yml,
+       build.gradle.kts, plugin.yml
+
+--------------------------------------------------------------------------------
+
+[1.1.10] — 2026-06-10
+----------------------
+CHANGED: Totem Shard base material changed from Echo Shard to Amethyst Shard.
+ADDED: Morph completion notification when a shard reaches its affinity threshold.
+
+  Shard material:
+    - createShard() now creates AMETHYST_SHARD items.
+    - migrateToAmethystShard() (formerly migrateToEchoShard) now converts old
+      Echo Shard-based shards to Amethyst Shard when they next gain affinity or
+      have their lore updated — no manual conversion needed.
+    - isTotemShard() is PDC-based, not material-based, so old Echo Shard shards
+      are still fully recognised and functional.
+    - Typed (morphed) shards, altar display, and the forging flow are unaffected.
+
+  Morph notification:
+    - When a shard reaches the affinity threshold and morphs into a typed shard
+      the owner player receives:
+        · A chat message: "&5Your shard awakened into a {type}!" (configurable)
+        · A sound: ENTITY_PLAYER_LEVELUP played to the player (configurable)
+        · A TOTEM_OF_UNDYING particle burst at the player's position (configurable)
+    - No notification fires on partial progress — only on the final morph.
+    - Sound and particle are configurable via shard.morph-sound and
+      shard.morph-particle in config.yml.
+    - Message configurable via messages.shard-morphed (use {type} placeholder).
+
+FILES: ItemUtil.java, AffinityListener.java, ConfigManager.java,
+       config.yml, build.gradle.kts, plugin.yml
+
+--------------------------------------------------------------------------------
+
+[1.1.9] — 2026-06-10
+---------------------
+ADDED: First-pickup guide book for Totem Shards.
+
+  When a player picks up a Totem Shard for the first time they hear a
+  page-turn sound (ITEM_BOOK_PAGE_TURN) and receive a written guide book
+  ("Totem Altar Notes" by "The Altar") explaining the full altar workflow.
+
+  Book contents (4 pages):
+    1. What a Totem Shard is and how affinity works.
+    2. The exact altar crafting recipe (Obsidian/Diamond/Echo Shard/Nether Star).
+    3. How to place and repair the altar using a Wither Skull ritual.
+    4. The two-step forging flow (insert shard → offer Totem → right-click to claim).
+
+  Persistence:
+    - The player's UUID is stored in player_data.yml on first pickup.
+    - File survives server restarts — no duplicate books on subsequent pickups.
+    - If inventory is full the book drops at the player's feet.
+    - Configurable: guide-book.enabled and guide-book.sound in config.yml.
+
+FILES: PlayerDataManager.java (new), ShardPickupListener.java (new),
+       ItemUtil.java, ConfigManager.java, TotemAltars.java,
+       config.yml, build.gradle.kts, plugin.yml
+
+--------------------------------------------------------------------------------
+
+[1.1.8] — 2026-06-10
+---------------------
+CHANGED: Forged totem is now claimed from the altar, not given directly to inventory.
+
+  Previously, right-clicking the altar with a vanilla Totem of Undying immediately
+  gave the forged typed totem to the player's inventory, with a 5-second visual
+  display that simply despawned.
+
+  New behaviour (three-stage forge):
+    1. Insert morphed shard → altar enters stage=2 (awaiting totem).
+       Shard ItemDisplay floats above altar.
+
+    2. Right-click with vanilla Totem of Undying → totem consumed, effects fire
+       (lightning, TOTEM particles, beacon sound), altar enters stage=3 (totem ready).
+       Shard display is replaced by a persistent Totem of Undying ItemDisplay.
+       Hologram shows "✦ CLAIM YOUR TOTEM ✦".
+       Player receives message: forge-totem-ready.
+
+    3. Right-click altar (no item required) → player claims the forged totem.
+       Display removed, pickup sound plays, altar resets to active (stage=1).
+       Player receives message: forge-complete.
+
+  Anti-duplication / ownership:
+    - The inserting player's UUID is stored as the altar owner at shard insertion.
+    - Only the owning player can claim the totem; others see "forge-wrong-owner".
+    - forgingInProgress lock prevents double-claim from spam clicks.
+    - Stage=3 persists in altars.yml across server restarts; Totem display is
+      restored on chunk load.
+
+FILES: AltarManager.java, AltarEffectsManager.java, AltarInteractionListener.java,
+       ConfigManager.java, config.yml, build.gradle.kts, plugin.yml
+
+--------------------------------------------------------------------------------
+
+[1.1.7] — 2026-06-10
+---------------------
+FIXED: Altar completion display flow.
+
+  Previously the altar showed a Totem of Undying floating above it immediately
+  when the typed shard was inserted — even though no Totem had been provided yet.
+
+  New behaviour:
+    1. When a typed shard is inserted into the altar:
+       - The shard itself (correct typed variant: e.g. Blast-Touched Shard) is
+         displayed as a floating ItemDisplay above the altar.
+       - Altar enters stage=2 (awaiting totem) as before.
+       - Player receives the "Insert a Totem of Undying" message as before.
+
+    2. When the player right-clicks with a vanilla Totem of Undying:
+       - Shard display is removed.
+       - Lightning, particles, and beacon sound fire.
+       - A Totem of Undying ItemDisplay appears above the altar for 5 seconds
+         (100 ticks) as a visual completion flourish, then despawns.
+       - Forged typed totem is given to the player.
+       - Hologram reverts to active text.
+
+FILES: AltarEffectsManager.java, build.gradle.kts, plugin.yml
+
+--------------------------------------------------------------------------------
+
+[1.1.6] — 2026-06-09
+---------------------
+ADDED: Two-step altar forging flow.
+
+  Previously, inserting a morphed Totem Shard directly yielded a forged totem.
+  Now the shard is the first step and a Totem of Undying is required to complete
+  the forge.
+
+  New flow:
+    1. Right-click active altar → Forging GUI → insert morphed shard
+       → shard consumed, altar enters "awaiting totem" state
+       → floating Totem of Undying ItemDisplay appears above altar
+       → hologram updates to "⚡ INSERT TOTEM ⚡"
+       → message: forge-insert-totem
+
+    2. Right-click altar with vanilla Totem of Undying in main hand
+       → 1 Totem consumed, completion effects (lightning, particles, sound)
+       → forged typed totem given to player
+       → ItemDisplay removed, hologram reverts to active text
+       → message: forge-complete
+
+  Behaviour:
+    - Only a vanilla (non-custom) Totem of Undying is accepted in step 2.
+    - Stage=2 (awaiting totem) is persisted in altars.yml and survives restarts.
+    - Totem display and hologram are restored on chunk load.
+    - Anti-double-click guard prevents duplicate forging from spam clicks.
+    - Off-hand interactions are ignored; main hand only.
+
+FILES: AltarManager.java, AltarEffectsManager.java, AltarInteractionListener.java,
+       ConfigManager.java, config.yml, plugin.yml, build.gradle.kts
+
+--------------------------------------------------------------------------------
+
+[1.1.5] — 2026-06-07 (pre-changelog)
+--------------------------------------
+Last deployed version before changelog was established.
+Features present: Totem Shard drops, affinity system, altar placement, repair
+ritual, forging GUI, blast/shadow/storm/swap/guardian totem abilities, legacy
+ingredient drops (Volatile Bone, Shadow Heartwood, Void Chorus, Fractured Echo,
+Sentinel Eye), hologram display, idle particles, placement effects, guardian
+link system, shadow armor manager.
+
+================================================================================

@@ -1,211 +1,231 @@
 package com.totemaltars.managers;
 
 import com.totemaltars.TotemAltars;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
-import org.bukkit.Bukkit;
-import org.bukkit.Chunk;
-import org.bukkit.Location;
-import org.bukkit.World;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.entity.Display;
-import org.bukkit.entity.TextDisplay;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.world.ChunkLoadEvent;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.configuration.file.YamlConfiguration;
 
-public class AltarManager implements Listener {
-
+public class AltarManager {
     private final TotemAltars plugin;
     private final File dataFile;
     private YamlConfiguration data;
-
-    private final List<Location> altars = new ArrayList<>();
-    private final Map<String, TextDisplay> holograms = new HashMap<>();
+    private final Map<String, AltarEntry> altars = new HashMap<String, AltarEntry>();
 
     public AltarManager(TotemAltars plugin) {
         this.plugin = plugin;
         this.dataFile = new File(plugin.getDataFolder(), "altars.yml");
-        load();
+        this.load();
     }
 
-    // ── Persistence ───────────────────────────────────────────────────────────────
-
-    private void load() {
-        if (!dataFile.exists()) {
-            try {
-                dataFile.createNewFile();
-            } catch (IOException e) {
-                plugin.getLogger().warning("Could not create altars.yml: " + e.getMessage());
-            }
+    public void registerAltar(Location loc) {
+        String key = this.key(loc);
+        if (this.altars.containsKey(key)) {
+            return;
         }
-        data = YamlConfiguration.loadConfiguration(dataFile);
-
-        for (String key : data.getStringList("altars")) {
-            Location loc = fromKey(key);
-            if (loc != null) {
-                altars.add(loc);
-                spawnHologram(loc);
-            } else {
-                plugin.getLogger().warning("Could not load altar '" + key + "' — world not loaded yet.");
-            }
-        }
-        plugin.getLogger().info("Loaded " + altars.size() + " altar(s).");
-    }
-
-    private void save() {
-        List<String> keys = new ArrayList<>();
-        for (Location loc : altars) keys.add(toKey(loc));
-        data.set("altars", keys);
-        try {
-            data.save(dataFile);
-        } catch (IOException e) {
-            plugin.getLogger().warning("Could not save altars.yml: " + e.getMessage());
-        }
-    }
-
-    // ── Public API ────────────────────────────────────────────────────────────────
-
-    public boolean createAltar(Location loc) {
-        Location block = loc.getBlock().getLocation();
-        if (isAltar(block)) return false;
-        altars.add(block);
-        spawnHologram(block);
-        save();
-        return true;
-    }
-
-    public boolean removeAltar(Location loc) {
-        String key = toKey(loc.getBlock().getLocation());
-        boolean removed = altars.removeIf(l -> toKey(l).equals(key));
-        if (removed) {
-            removeHologram(key);
-            save();
-        }
-        return removed;
+        this.altars.put(key, new AltarEntry(this.worldName(loc), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(), null, null, 0));
+        this.save();
     }
 
     public boolean isAltar(Location loc) {
-        String key = toKey(loc.getBlock().getLocation());
-        return altars.stream().anyMatch(l -> toKey(l).equals(key));
+        return this.altars.containsKey(this.key(loc));
     }
 
-    /** Returns the nearest altar in the same world, or the first altar in any world if none match. */
-    public Location getNearestAltar(Location from) {
-        Location nearest = null;
-        double minDist = Double.MAX_VALUE;
-        for (Location altar : altars) {
-            if (!altar.getWorld().equals(from.getWorld())) continue;
-            double dist = from.distanceSquared(altar);
-            if (dist < minDist) {
-                minDist = dist;
-                nearest = altar;
+    public boolean isBound(Location loc) {
+        AltarEntry entry = this.altars.get(this.key(loc));
+        return entry != null && entry.type != null;
+    }
+
+    public String getType(Location loc) {
+        AltarEntry entry = this.altars.get(this.key(loc));
+        return entry != null ? entry.type : null;
+    }
+
+    public void bindAltar(Location loc, String type, UUID owner) {
+        String key = this.key(loc);
+        AltarEntry existing = this.altars.get(key);
+        if (existing == null) {
+            return;
+        }
+        this.altars.put(key, new AltarEntry(existing.world, existing.x, existing.y, existing.z, type, owner, existing.stage));
+        this.save();
+    }
+
+    public int getStage(Location loc) {
+        AltarEntry entry = this.altars.get(this.key(loc));
+        return entry != null ? entry.stage : 0;
+    }
+
+    public void incrementStage(Location loc) {
+        String key = this.key(loc);
+        AltarEntry e = this.altars.get(key);
+        if (e == null) {
+            return;
+        }
+        this.altars.put(key, new AltarEntry(e.world, e.x, e.y, e.z, e.type, e.owner, e.stage + 1));
+        this.save();
+    }
+
+    public boolean isActive(Location loc) {
+        return this.getStage(loc) >= 1;
+    }
+
+    public void setActive(Location loc) {
+        String key = this.key(loc);
+        AltarEntry e = this.altars.get(key);
+        if (e == null) {
+            return;
+        }
+        this.altars.put(key, new AltarEntry(e.world, e.x, e.y, e.z, e.type, e.owner, 1));
+        this.save();
+    }
+
+    public void setStage(Location loc, int stage) {
+        String key = this.key(loc);
+        AltarEntry e = this.altars.get(key);
+        if (e == null) {
+            return;
+        }
+        this.altars.put(key, new AltarEntry(e.world, e.x, e.y, e.z, e.type, e.owner, stage));
+        this.save();
+    }
+
+    public boolean isAwaitingTotem(Location loc) {
+        return this.getStage(loc) == 2;
+    }
+
+    public boolean isTotemReady(Location loc) {
+        return this.getStage(loc) == 3;
+    }
+
+    public UUID getOwner(Location loc) {
+        AltarEntry entry = this.altars.get(this.key(loc));
+        return entry != null ? entry.owner : null;
+    }
+
+    public void transitionToTotemReady(Location loc) {
+        String key = this.key(loc);
+        AltarEntry e = this.altars.get(key);
+        if (e == null) {
+            return;
+        }
+        this.altars.put(key, new AltarEntry(e.world, e.x, e.y, e.z, e.type, e.owner, 3));
+        this.save();
+    }
+
+    public void acceptShard(Location loc, String shardType, UUID owner) {
+        String key = this.key(loc);
+        AltarEntry e = this.altars.get(key);
+        if (e == null) {
+            return;
+        }
+        this.altars.put(key, new AltarEntry(e.world, e.x, e.y, e.z, shardType, owner, 2));
+        this.save();
+    }
+
+    public void completeForging(Location loc) {
+        String key = this.key(loc);
+        AltarEntry e = this.altars.get(key);
+        if (e == null) {
+            return;
+        }
+        this.altars.put(key, new AltarEntry(e.world, e.x, e.y, e.z, null, null, 1));
+        this.save();
+    }
+
+    public void removeAltar(Location loc) {
+        if (this.altars.remove(this.key(loc)) != null) {
+            this.save();
+        }
+    }
+
+    public boolean hasAltarByKey(String key) {
+        return this.altars.containsKey(key);
+    }
+
+    public Collection<Location> getAllAltarLocations() {
+        ArrayList<Location> result = new ArrayList<Location>(this.altars.size());
+        for (AltarEntry e : this.altars.values()) {
+            World w = Bukkit.getWorld((String)e.world);
+            if (w == null) continue;
+            result.add(new Location(w, (double)e.x, (double)e.y, (double)e.z));
+        }
+        return Collections.unmodifiableList(result);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void load() {
+        this.data = this.dataFile.exists() ? YamlConfiguration.loadConfiguration((File)this.dataFile) : new YamlConfiguration();
+        this.altars.clear();
+        for (Map map : this.data.getMapList("altars")) {
+            try {
+                String world = (String)map.get("world");
+                int x = ((Number)map.get("x")).intValue();
+                int y = ((Number)map.get("y")).intValue();
+                int z = ((Number)map.get("z")).intValue();
+                String type = (String)map.get("type");
+                String ownerStr = (String)map.get("owner");
+                UUID owner = ownerStr != null ? UUID.fromString(ownerStr) : null;
+                int stage = map.get("stage") != null ? ((Number)map.get("stage")).intValue() : 0;
+                this.altars.put(this.makeKey(world, x, y, z), new AltarEntry(world, x, y, z, type, owner, stage));
+            }
+            catch (Exception ex) {
+                this.plugin.getLogger().warning("Skipping malformed altar entry in altars.yml: " + ex.getMessage());
             }
         }
-        if (nearest != null) return nearest;
-        return altars.isEmpty() ? null : altars.get(0);
+        this.plugin.getLogger().info("Loaded " + this.altars.size() + " altar(s) from altars.yml.");
     }
 
-    public int getAltarCount() {
-        return altars.size();
-    }
-
-    // ── Holograms ─────────────────────────────────────────────────────────────────
-
-    private void spawnHologram(Location altarLoc) {
-        World world = altarLoc.getWorld();
-        if (world == null) return;
-
-        String key = toKey(altarLoc);
-        double cx = altarLoc.getBlockX() + 0.5;
-        double cz = altarLoc.getBlockZ() + 0.5;
-
-        spawnLine(key + "_top", world, cx, altarLoc.getBlockY() + 2.0, cz,
-                Component.text("Totem Altar")
-                        .color(NamedTextColor.GOLD)
-                        .decoration(TextDecoration.BOLD, true));
-
-        spawnLine(key + "_bot", world, cx, altarLoc.getBlockY() + 1.5, cz,
-                Component.text("Right-click to enchant")
-                        .color(NamedTextColor.YELLOW));
-    }
-
-    private void spawnLine(String holoKey, World world, double x, double y, double z, Component text) {
-        TextDisplay entity = world.spawn(new Location(world, x, y, z), TextDisplay.class, td -> {
-            td.text(text);
-            td.setPersistent(false);
-            td.setBillboard(Display.Billboard.CENTER);
-            td.setDefaultBackground(false);
-            td.setAlignment(TextDisplay.TextAlignment.CENTER);
-            td.setShadowed(true);
-        });
-        holograms.put(holoKey, entity);
-    }
-
-    private void removeHologram(String key) {
-        TextDisplay top = holograms.remove(key + "_top");
-        TextDisplay bot = holograms.remove(key + "_bot");
-        if (top != null && top.isValid()) top.remove();
-        if (bot != null && bot.isValid()) bot.remove();
-    }
-
-    public void disable() {
-        for (TextDisplay td : holograms.values()) {
-            if (td != null && td.isValid()) td.remove();
-        }
-        holograms.clear();
-    }
-
-    // ── Respawn holograms when their chunk reloads ────────────────────────────────
-
-    @EventHandler
-    public void onChunkLoad(ChunkLoadEvent event) {
-        Chunk loaded = event.getChunk();
-        for (Location altarLoc : altars) {
-            World altarWorld = altarLoc.getWorld();
-            if (altarWorld == null || !altarWorld.equals(event.getWorld())) continue;
-            if (altarLoc.getChunk().getX() != loaded.getX() ||
-                altarLoc.getChunk().getZ() != loaded.getZ()) continue;
-
-            String key = toKey(altarLoc);
-            TextDisplay top = holograms.get(key + "_top");
-            TextDisplay bot = holograms.get(key + "_bot");
-            if (top == null || !top.isValid() || bot == null || !bot.isValid()) {
-                removeHologram(key);
-                plugin.getServer().getScheduler().runTask(plugin, () -> spawnHologram(altarLoc));
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void save() {
+        ArrayList list = new ArrayList();
+        for (AltarEntry e : this.altars.values()) {
+            LinkedHashMap<String, Object> map = new LinkedHashMap<String, Object>();
+            map.put("world", e.world);
+            map.put("x", e.x);
+            map.put("y", e.y);
+            map.put("z", e.z);
+            if (e.type != null) {
+                map.put("type", e.type);
             }
+            if (e.owner != null) {
+                map.put("owner", e.owner.toString());
+            }
+            if (e.stage > 0) {
+                map.put("stage", e.stage);
+            }
+            list.add(map);
         }
-    }
-
-    // ── Key helpers ───────────────────────────────────────────────────────────────
-
-    private String toKey(Location loc) {
-        return loc.getWorld().getName() + ":"
-                + loc.getBlockX() + ":"
-                + loc.getBlockY() + ":"
-                + loc.getBlockZ();
-    }
-
-    private Location fromKey(String key) {
-        String[] parts = key.split(":");
-        if (parts.length != 4) return null;
-        World world = Bukkit.getWorld(parts[0]);
-        if (world == null) return null;
+        this.data.set("altars", list);
         try {
-            return new Location(world,
-                    Integer.parseInt(parts[1]),
-                    Integer.parseInt(parts[2]),
-                    Integer.parseInt(parts[3]));
-        } catch (NumberFormatException e) {
-            return null;
+            this.data.save(this.dataFile);
         }
+        catch (IOException ex) {
+            this.plugin.getLogger().severe("Failed to save altars.yml: " + ex.getMessage());
+        }
+    }
+
+    private String key(Location loc) {
+        return this.makeKey(this.worldName(loc), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+    }
+
+    private String makeKey(String world, int x, int y, int z) {
+        return world + ":" + x + ":" + y + ":" + z;
+    }
+
+    private String worldName(Location loc) {
+        return loc.getWorld() != null ? loc.getWorld().getName() : "world";
+    }
+
+    private record AltarEntry(String world, int x, int y, int z, String type, UUID owner, int stage) {
     }
 }

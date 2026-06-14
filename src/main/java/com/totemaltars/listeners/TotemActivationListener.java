@@ -1,341 +1,327 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  net.kyori.adventure.text.Component
+ *  net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
+ *  org.bukkit.Bukkit
+ *  org.bukkit.GameMode
+ *  org.bukkit.Location
+ *  org.bukkit.Material
+ *  org.bukkit.Particle
+ *  org.bukkit.Sound
+ *  org.bukkit.World
+ *  org.bukkit.block.Block
+ *  org.bukkit.entity.Entity
+ *  org.bukkit.entity.LivingEntity
+ *  org.bukkit.entity.Player
+ *  org.bukkit.event.EventHandler
+ *  org.bukkit.event.EventPriority
+ *  org.bukkit.event.Listener
+ *  org.bukkit.event.entity.EntityResurrectEvent
+ *  org.bukkit.event.player.PlayerQuitEvent
+ *  org.bukkit.inventory.ItemStack
+ *  org.bukkit.plugin.Plugin
+ *  org.bukkit.potion.PotionEffect
+ *  org.bukkit.potion.PotionEffectType
+ *  org.bukkit.scheduler.BukkitRunnable
+ *  org.bukkit.util.Vector
+ */
 package com.totemaltars.listeners;
 
 import com.totemaltars.TotemAltars;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
-import org.bukkit.*;
-import org.bukkit.entity.*;
-import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.Particle;
+import org.bukkit.Sound;
+import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityResurrectEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.UUID;
-
-public class TotemActivationListener implements Listener {
-
+public class TotemActivationListener
+implements Listener {
     private final TotemAltars plugin;
-    private final Random random = new Random();
-    private final Map<UUID, Integer> cooldownTasks = new HashMap<>();
+    private final Map<UUID, Integer> cooldownTasks = new HashMap<UUID, Integer>();
 
     public TotemActivationListener(TotemAltars plugin) {
         this.plugin = plugin;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  TOTEM POP DETECTION
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    @EventHandler(priority = EventPriority.HIGH)
-    public void onTotemPop(EntityResurrectEvent event) {
-        if (!(event.getEntity() instanceof Player player)) return;
-
-        EquipmentSlot hand = event.getHand();
-        if (hand == null) return;
-
-        ItemStack totemItem = (hand == EquipmentSlot.HAND)
-                ? player.getInventory().getItemInMainHand()
-                : player.getInventory().getItemInOffHand();
-
-        String totemType = plugin.getItemUtil().getTotemType(totemItem);
-        if (totemType == null) return;
-
-        if (plugin.getCooldownManager().isOnCooldown(player.getUniqueId(), "__global__")) {
-            long secs = plugin.getCooldownManager().getRemainingSeconds(player.getUniqueId(), "__global__");
-            String msg = plugin.getConfigManager().getMessage("global-cooldown-message")
-                    .replace("{seconds}", String.valueOf(secs));
-            actionBar(player, msg);
+    @EventHandler(priority=EventPriority.HIGH)
+    public void onTotemUse(EntityResurrectEvent event) {
+        LivingEntity livingEntity = event.getEntity();
+        if (!(livingEntity instanceof Player)) {
             return;
         }
-
-        plugin.getCooldownManager().setCooldown(
-                player.getUniqueId(), "__global__",
-                plugin.getConfigManager().getGlobalCooldown());
-
-        startCooldownDisplay(player);
-
-        // Read the link ID now — the item is consumed by vanilla after this event.
-        UUID guardianLinkId = "guardian".equals(totemType)
-                ? plugin.getItemUtil().getGuardianLinkId(totemItem)
-                : null;
-
-        Bukkit.getScheduler().runTaskLater(plugin,
-                () -> activateAbility(player, totemType, guardianLinkId), 1L);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  ABILITY DISPATCH
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    private void activateAbility(Player player, String type, UUID guardianLink) {
-        if (!player.isOnline()) return;
-        switch (type) {
-            case "blast"    -> doBlast(player);
-            case "shadow"   -> doShadow(player);
-            case "storm"    -> doStorm(player);
-            case "swap"     -> doSwap(player);
-            case "guardian" -> doGuardian(player, guardianLink);
+        Player player = (Player)livingEntity;
+        if (event.isCancelled()) {
+            return;
         }
+        ItemStack offhand = player.getInventory().getItemInOffHand();
+        ItemStack mainhand = player.getInventory().getItemInMainHand();
+        ItemStack totemItem = null;
+        if (offhand.getType() == Material.TOTEM_OF_UNDYING) {
+            totemItem = offhand;
+        } else if (mainhand.getType() == Material.TOTEM_OF_UNDYING) {
+            totemItem = mainhand;
+        }
+        if (totemItem == null) {
+            return;
+        }
+        String totemType = this.plugin.getItemUtil().getTotemType(totemItem);
+        if (totemType == null) {
+            return;
+        }
+        UUID linkId = "guardian".equals(totemType) ? this.plugin.getItemUtil().getGuardianLinkId(totemItem) : null;
+        UUID playerId = player.getUniqueId();
+        if (this.plugin.getCooldownManager().isOnCooldown(playerId, "__global__")) {
+            long remaining = this.plugin.getCooldownManager().getRemainingSeconds(playerId, "__global__");
+            player.sendActionBar(this.legacy(this.plugin.getConfigManager().getMessage("global-cooldown-message").replace("{seconds}", String.valueOf(remaining))));
+            return;
+        }
+        long cooldownSecs = this.plugin.getConfigManager().getGlobalCooldown();
+        this.plugin.getCooldownManager().setCooldown(playerId, "__global__", cooldownSecs);
+        this.startCooldownDisplay(player, cooldownSecs);
+        String type = totemType;
+        UUID gLink = linkId;
+        Bukkit.getScheduler().runTaskLater((Plugin)this.plugin, () -> {
+            switch (type) {
+                case "blast": {
+                    this.doBlast(player);
+                    break;
+                }
+                case "shadow": {
+                    this.doShadow(player);
+                    break;
+                }
+                case "storm": {
+                    this.doStorm(player);
+                    break;
+                }
+                case "swap": {
+                    this.doSwap(player);
+                    break;
+                }
+                case "guardian": {
+                    this.doGuardian(player, gLink);
+                }
+            }
+        }, 1L);
     }
-
-    // ─── Blast ────────────────────────────────────────────────────────────────────
 
     private void doBlast(Player player) {
-        double radius   = plugin.getConfigManager().getBlastRadius();
-        double strength = plugin.getConfigManager().getBlastKnockback();
-        Location center = player.getLocation();
-
-        for (Entity nearby : player.getWorld().getNearbyEntities(center, radius, radius, radius)) {
-            if (nearby.equals(player)) continue;
-            if (!(nearby instanceof LivingEntity)) continue;
-
-            Vector dir = nearby.getLocation().subtract(center).toVector();
-            if (dir.lengthSquared() < 0.0001) {
-                dir = new Vector(random.nextDouble() * 2 - 1, 0.5, random.nextDouble() * 2 - 1);
-            } else {
+        double radius = this.plugin.getConfigManager().getBlastRadius();
+        double knockback = this.plugin.getConfigManager().getBlastKnockback();
+        Location loc = player.getLocation();
+        for (Entity e : player.getNearbyEntities(radius, radius, radius)) {
+            if (!(e instanceof LivingEntity) || e.equals((Object)player)) continue;
+            Vector dir = e.getLocation().toVector().subtract(loc.toVector());
+            if (dir.lengthSquared() > 0.0) {
                 dir.normalize();
+            } else {
+                dir = new Vector(0, 1, 0);
             }
-            dir.setY(Math.max(dir.getY(), 0.25));
-            nearby.setVelocity(dir.multiply(strength));
+            e.setVelocity(dir.multiply(knockback));
         }
-
-        player.getWorld().spawnParticle(Particle.EXPLOSION_EMITTER, center, 1, 0, 0, 0, 0);
-        player.getWorld().spawnParticle(Particle.FLAME, center, 40, 1.2, 0.4, 1.2, 0.06);
-        player.getWorld().playSound(center, Sound.ENTITY_GENERIC_EXPLODE, 1.5f, 0.8f);
-
-        actionBar(player, plugin.getConfigManager().getMessage("blast-activated"));
+        World world = loc.getWorld();
+        world.spawnParticle(Particle.EXPLOSION_EMITTER, loc, 3, 1.0, 1.0, 1.0, 0.0);
+        world.spawnParticle(Particle.FLAME, loc, 30, 1.0, 1.0, 1.0, 0.1);
+        world.playSound(loc, Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 0.8f);
+        this.sendMessage(player, this.plugin.getConfigManager().getMessage("blast-activated"));
     }
-
-    // ─── Shadow ───────────────────────────────────────────────────────────────────
 
     private void doShadow(Player player) {
-        int durationTicks = plugin.getConfigManager().getShadowDuration() * 20;
-
-        player.addPotionEffect(new PotionEffect(
-                PotionEffectType.INVISIBILITY, durationTicks, 0, false, false, false));
-        plugin.getShadowArmorManager().startShadow(player, durationTicks);
-
-        player.getWorld().spawnParticle(Particle.SMOKE,
-                player.getLocation().add(0, 1, 0), 30, 0.3, 0.5, 0.3, 0.04);
-        player.getWorld().playSound(player.getLocation(),
-                Sound.ENTITY_ENDERMAN_TELEPORT, 0.6f, 1.6f);
-
-        actionBar(player, plugin.getConfigManager().getMessage("shadow-activated"));
+        int durationTicks = this.plugin.getConfigManager().getShadowDuration() * 20;
+        player.setFireTicks(0);
+        player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, durationTicks, 0, false, false, false));
+        this.plugin.getShadowArmorManager().startShadow(player, durationTicks);
+        Location loc = player.getLocation();
+        loc.getWorld().spawnParticle(Particle.SMOKE, loc, 30, 0.5, 0.5, 0.5, 0.05);
+        loc.getWorld().playSound(loc, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 0.5f);
+        this.sendMessage(player, this.plugin.getConfigManager().getMessage("shadow-activated"));
     }
-
-    // ─── Storm ────────────────────────────────────────────────────────────────────
 
     private void doStorm(Player player) {
-        Location safe = findSafeLocation(
-                player.getLocation(),
-                plugin.getConfigManager().getStormMinDistance(),
-                plugin.getConfigManager().getStormMaxDistance(),
-                plugin.getConfigManager().getStormMaxAttempts());
-
-        if (safe == null) {
-            actionBar(player, plugin.getConfigManager().getMessage("no-safe-location"));
+        int minDist = this.plugin.getConfigManager().getStormMinDistance();
+        int maxDist = this.plugin.getConfigManager().getStormMaxDistance();
+        int maxAttempts = this.plugin.getConfigManager().getStormMaxAttempts();
+        Location target = this.findSafeLocation(player.getLocation(), minDist, maxDist, maxAttempts);
+        if (target == null) {
+            this.sendMessage(player, this.plugin.getConfigManager().getMessage("no-safe-location"));
             return;
         }
-
-        player.getWorld().spawnParticle(Particle.PORTAL,
-                player.getLocation().add(0, 1, 0), 60, 0.3, 0.7, 0.3, 0.6);
-        player.getWorld().playSound(player.getLocation(),
-                Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 0.7f);
-
-        player.teleport(safe);
-
-        safe.getWorld().spawnParticle(Particle.PORTAL,
-                safe.clone().add(0, 1, 0), 60, 0.3, 0.7, 0.3, 0.6);
-        safe.getWorld().playSound(safe,
-                Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 0.6f, 1.4f);
-
-        actionBar(player, plugin.getConfigManager().getMessage("storm-activated"));
+        Location from = player.getLocation().clone();
+        player.teleport(target);
+        from.getWorld().spawnParticle(Particle.PORTAL, from, 50, 0.5, 0.5, 0.5, 0.5);
+        target.getWorld().spawnParticle(Particle.PORTAL, target, 50, 0.5, 0.5, 0.5, 0.5);
+        target.getWorld().playSound(target, Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1.0f, 1.0f);
+        this.sendMessage(player, this.plugin.getConfigManager().getMessage("storm-activated"));
     }
-
-    private Location findSafeLocation(Location origin, double minDist, double maxDist, int maxAttempts) {
-        World world = origin.getWorld();
-        for (int i = 0; i < maxAttempts; i++) {
-            double angle = random.nextDouble() * 2 * Math.PI;
-            double dist  = minDist + random.nextDouble() * (maxDist - minDist);
-            int x = (int) (origin.getX() + dist * Math.cos(angle));
-            int z = (int) (origin.getZ() + dist * Math.sin(angle));
-
-            int surfaceY = world.getHighestBlockYAt(x, z);
-            Material below = world.getBlockAt(x, surfaceY,     z).getType();
-            Material feet  = world.getBlockAt(x, surfaceY + 1, z).getType();
-            Material head  = world.getBlockAt(x, surfaceY + 2, z).getType();
-
-            if (!below.isSolid()) continue;
-            if (below == Material.LAVA || below == Material.WATER) continue;
-            if (!feet.isAir() || !head.isAir()) continue;
-
-            int landY = surfaceY + 1;
-            if (landY <= world.getMinHeight() + 4) continue;
-            if (landY >= world.getMaxHeight() - 4) continue;
-
-            return new Location(world, x + 0.5, landY, z + 0.5,
-                    origin.getYaw(), origin.getPitch());
-        }
-        return null;
-    }
-
-    // ─── Swap ─────────────────────────────────────────────────────────────────────
 
     private void doSwap(Player player) {
-        double range = plugin.getConfigManager().getSwapRange();
-        double rangeSq = range * range;
-
-        List<Player> candidates = new ArrayList<>();
-        for (Player other : player.getWorld().getPlayers()) {
-            if (other.equals(player)) continue;
-            if (other.getGameMode() == GameMode.SPECTATOR) continue;
-            if (player.getLocation().distanceSquared(other.getLocation()) <= rangeSq) {
-                candidates.add(other);
-            }
+        double range = this.plugin.getConfigManager().getSwapRange();
+        List<LivingEntity> pool = new java.util.ArrayList<>();
+        // Add nearby non-spectator players (excluding self)
+        for (Player p : player.getWorld().getPlayers()) {
+            if (p.equals(player)) continue;
+            if (p.getGameMode() == GameMode.SPECTATOR) continue;
+            if (p.getLocation().distance(player.getLocation()) > range) continue;
+            pool.add(p);
         }
-
-        if (candidates.isEmpty()) {
-            actionBar(player, plugin.getConfigManager().getMessage("swap-no-target"));
+        // Add nearby living mobs (excluding players, armor stands, named entities, dead entities)
+        for (LivingEntity e : player.getWorld().getNearbyEntitiesByType(LivingEntity.class, player.getLocation(), range)) {
+            if (e instanceof Player) continue;
+            if (e instanceof ArmorStand) continue;
+            if (e.isDead()) continue;
+            if (e.customName() != null) continue;
+            if (e.getCustomName() != null) continue;
+            pool.add(e);
+        }
+        if (pool.isEmpty()) {
+            this.sendMessage(player, this.plugin.getConfigManager().getMessage("swap-no-target"));
             return;
         }
-
-        Player target = candidates.get(new Random().nextInt(candidates.size()));
-
-        Location playerLoc = player.getLocation().clone();
-        Location targetLoc = target.getLocation().clone();
-
-        player.getWorld().spawnParticle(Particle.PORTAL,
-                playerLoc.clone().add(0, 1, 0), 50, 0.3, 0.7, 0.3, 0.5);
-        target.getWorld().spawnParticle(Particle.PORTAL,
-                targetLoc.clone().add(0, 1, 0), 50, 0.3, 0.7, 0.3, 0.5);
-        player.getWorld().playSound(playerLoc, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f);
-
-        Location playerDest = targetLoc.clone();
-        playerDest.setYaw(playerLoc.getYaw());
-        playerDest.setPitch(playerLoc.getPitch());
-
-        Location targetDest = playerLoc.clone();
-        targetDest.setYaw(targetLoc.getYaw());
-        targetDest.setPitch(targetLoc.getPitch());
-
+        LivingEntity target = pool.get(ThreadLocalRandom.current().nextInt(pool.size()));
+        Location fromLoc = player.getLocation().clone();
+        Location toLoc = target.getLocation().clone();
+        Location playerDest = toLoc.clone();
+        playerDest.setYaw(fromLoc.getYaw());
+        playerDest.setPitch(fromLoc.getPitch());
+        Location targetDest = fromLoc.clone();
+        targetDest.setYaw(toLoc.getYaw());
+        targetDest.setPitch(toLoc.getPitch());
         player.teleport(playerDest);
         target.teleport(targetDest);
-
-        player.getWorld().spawnParticle(Particle.PORTAL,
-                target.getLocation().clone().add(0, 1, 0), 50, 0.3, 0.7, 0.3, 0.5);
-        player.getWorld().playSound(target.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.4f);
-
-        actionBar(player, plugin.getConfigManager().getMessage("swap-activated"));
-        actionBar(target, "&dYou were swapped by " + player.getName() + "!");
+        fromLoc.getWorld().spawnParticle(Particle.PORTAL, fromLoc, 30, 0.5, 0.5, 0.5, 0.5);
+        toLoc.getWorld().spawnParticle(Particle.PORTAL, toLoc, 30, 0.5, 0.5, 0.5, 0.5);
+        fromLoc.getWorld().playSound(fromLoc, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.2f);
+        toLoc.getWorld().playSound(toLoc, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.2f);
+        this.sendMessage(player, this.plugin.getConfigManager().getMessage("swap-activated"));
+        if (target instanceof Player targetPlayer) {
+            targetPlayer.sendActionBar(this.legacy("&dYou were swapped by &f" + player.getName() + "&d!"));
+        }
     }
-
-    // ─── Guardian ─────────────────────────────────────────────────────────────────
 
     private void doGuardian(Player player, UUID linkId) {
         if (linkId == null) {
-            actionBar(player, plugin.getConfigManager().getMessage("guardian-not-linked"));
+            this.sendMessage(player, this.plugin.getConfigManager().getMessage("guardian-not-linked"));
             return;
         }
-
-        // Scan ALL online players for anyone holding a totem with the same link ID.
-        // This works correctly even if the totem was traded to a third player.
-        Location destination = player.getLocation().clone();
-        boolean foundAlly = false;
-
-        for (Player other : Bukkit.getOnlinePlayers()) {
-            if (other.equals(player)) continue;
-            if (!removeTotemWithLinkId(other, linkId)) continue;
-
-            foundAlly = true;
-            other.teleport(destination);
-
-            player.getWorld().spawnParticle(Particle.PORTAL,
-                    destination.clone().add(0, 1, 0), 60, 0.5, 0.7, 0.5, 0.5);
-            player.getWorld().playSound(destination, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 0.8f);
-
-            String allyMsg = plugin.getConfigManager().getMessage("guardian-ally-teleported")
-                    .replace("{player}", player.getName());
-            other.sendMessage(LegacyComponentSerializer.legacyAmpersand().deserialize(allyMsg));
-        }
-
-        if (!foundAlly) {
-            actionBar(player, plugin.getConfigManager().getMessage("guardian-partner-offline"));
+        for (Player ally : Bukkit.getOnlinePlayers()) {
+            if (ally.equals((Object)player) || !this.removeTotemWithLinkId(ally, linkId)) continue;
+            Location dest = player.getLocation().clone();
+            dest.setYaw(ally.getLocation().getYaw());
+            dest.setPitch(ally.getLocation().getPitch());
+            ally.teleport(dest);
+            dest.getWorld().spawnParticle(Particle.PORTAL, dest, 50, 0.5, 0.5, 0.5, 0.5);
+            dest.getWorld().playSound(dest, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 0.8f);
+            this.sendMessage(player, this.plugin.getConfigManager().getMessage("guardian-activated").replace("{player}", ally.getName()));
+            this.sendMessage(ally, this.plugin.getConfigManager().getMessage("guardian-ally-teleported").replace("{player}", player.getName()));
             return;
         }
-
-        actionBar(player, plugin.getConfigManager().getMessage("guardian-activated"));
+        this.sendMessage(player, this.plugin.getConfigManager().getMessage("guardian-partner-offline"));
     }
 
-    /**
-     * Finds and removes the first Guardian Totem in the player's inventory that carries
-     * the given link ID. Returns true if one was removed.
-     */
-    private boolean removeTotemWithLinkId(Player player, UUID linkId) {
-        ItemStack[] contents = player.getInventory().getContents();
-        for (int i = 0; i < contents.length; i++) {
+    private boolean removeTotemWithLinkId(Player target, UUID linkId) {
+        ItemStack[] contents = target.getInventory().getContents();
+        for (int i = 0; i < contents.length; ++i) {
             ItemStack item = contents[i];
-            if (item == null) continue;
-            if (!"guardian".equals(plugin.getItemUtil().getTotemType(item))) continue;
-            if (!linkId.equals(plugin.getItemUtil().getGuardianLinkId(item))) continue;
-            if (item.getAmount() > 1) {
-                item.setAmount(item.getAmount() - 1);
+            if (item == null || !"guardian".equals(this.plugin.getItemUtil().getTotemType(item)) || !linkId.equals(this.plugin.getItemUtil().getGuardianLinkId(item))) continue;
+            if (item.getAmount() == 1) {
+                target.getInventory().setItem(i, null);
             } else {
-                player.getInventory().setItem(i, null);
+                item.setAmount(item.getAmount() - 1);
             }
             return true;
         }
         return false;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  CLEANUP
-    // ═══════════════════════════════════════════════════════════════════════════
+    private Location findSafeLocation(Location origin, int minDist, int maxDist, int maxAttempts) {
+        World world = origin.getWorld();
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
+        for (int i = 0; i < maxAttempts; ++i) {
+            int z;
+            double angle = rng.nextDouble() * 2.0 * Math.PI;
+            double dist = (double)minDist + rng.nextDouble() * (double)(maxDist - minDist);
+            int x = (int)(origin.getX() + Math.cos(angle) * dist);
+            int y = world.getHighestBlockYAt(x, z = (int)(origin.getZ() + Math.sin(angle) * dist)) + 1;
+            if (y < world.getMinHeight() || y >= world.getMaxHeight() - 1) continue;
+            Block feet = world.getBlockAt(x, y, z);
+            Block head = world.getBlockAt(x, y + 1, z);
+            Block ground = world.getBlockAt(x, y - 1, z);
+            if (!feet.getType().isAir() || !head.getType().isAir() || !ground.getType().isSolid()) continue;
+            return new Location(world, (double)x + 0.5, (double)y, (double)z + 0.5, origin.getYaw(), origin.getPitch());
+        }
+        return null;
+    }
 
-    private void startCooldownDisplay(Player player) {
-        UUID playerId = player.getUniqueId();
-        Integer existing = cooldownTasks.remove(playerId);
-        if (existing != null) Bukkit.getScheduler().cancelTask(existing);
+    private void startCooldownDisplay(final Player player, long cooldownSecs) {
+        final UUID id = player.getUniqueId();
+        Integer existing = this.cooldownTasks.remove(id);
+        if (existing != null) {
+            Bukkit.getScheduler().cancelTask(existing.intValue());
+        }
+        BukkitRunnable task = new BukkitRunnable(){
 
-        BukkitRunnable task = new BukkitRunnable() {
-            @Override
             public void run() {
-                if (!player.isOnline()) { cooldownTasks.remove(playerId); cancel(); return; }
-                if (plugin.getCooldownManager().isOnCooldown(playerId, "__global__")) {
-                    long secs = plugin.getCooldownManager().getRemainingSeconds(playerId, "__global__");
-                    actionBar(player, plugin.getConfigManager().getMessage("global-cooldown-message")
-                            .replace("{seconds}", String.valueOf(secs)));
-                } else {
-                    cooldownTasks.remove(playerId);
-                    cancel();
+                if (!player.isOnline()) {
+                    this.cancel();
+                    TotemActivationListener.this.cooldownTasks.remove(id);
+                    return;
                 }
+                long remaining = TotemActivationListener.this.plugin.getCooldownManager().getRemainingSeconds(id, "__global__");
+                if (remaining <= 0L) {
+                    this.cancel();
+                    TotemActivationListener.this.cooldownTasks.remove(id);
+                    return;
+                }
+                player.sendActionBar(TotemActivationListener.this.legacy(TotemActivationListener.this.plugin.getConfigManager().getMessage("cooldown-display").replace("{seconds}", String.valueOf(remaining))));
             }
         };
-        cooldownTasks.put(playerId, task.runTaskTimer(plugin, 0L, 20L).getTaskId());
+        this.cooldownTasks.put(id, task.runTaskTimer((Plugin)this.plugin, 0L, 20L).getTaskId());
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        UUID playerId = event.getPlayer().getUniqueId();
-        Integer taskId = cooldownTasks.remove(playerId);
-        if (taskId != null) Bukkit.getScheduler().cancelTask(taskId);
-        plugin.getCooldownManager().remove(playerId);
+        UUID id = event.getPlayer().getUniqueId();
+        Integer taskId = this.cooldownTasks.remove(id);
+        if (taskId != null) {
+            Bukkit.getScheduler().cancelTask(taskId.intValue());
+        }
+        this.plugin.getCooldownManager().remove(id);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────────
+    private void sendMessage(Player player, String message) {
+        player.sendMessage(this.legacy(message));
+    }
 
-    private void actionBar(Player player, String legacyMsg) {
-        player.sendActionBar(
-                LegacyComponentSerializer.legacyAmpersand().deserialize(legacyMsg));
+    private Component legacy(String s) {
+        return LegacyComponentSerializer.legacyAmpersand().deserialize(s);
     }
 }
+

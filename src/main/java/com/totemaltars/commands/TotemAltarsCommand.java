@@ -1,11 +1,25 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  net.kyori.adventure.text.Component
+ *  net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
+ *  org.bukkit.Bukkit
+ *  org.bukkit.command.Command
+ *  org.bukkit.command.CommandExecutor
+ *  org.bukkit.command.CommandSender
+ *  org.bukkit.command.TabCompleter
+ *  org.bukkit.entity.Player
+ *  org.bukkit.inventory.ItemStack
+ */
 package com.totemaltars.commands;
 
 import com.totemaltars.TotemAltars;
+import java.util.List;
+import java.util.Locale;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -13,259 +27,285 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.List;
-import java.util.Locale;
-
-public class TotemAltarsCommand implements CommandExecutor, TabCompleter {
-
-    private static final List<String> TYPES       = List.of("blast", "shadow", "storm", "swap", "guardian");
-    private static final List<String> ADMIN_SUBS  = List.of("createaltar", "removealtar",
-                                                             "giveingredient", "givetotem", "reload");
-    private static final List<String> ALL_SUBS    = List.of("createaltar", "removealtar",
-                                                             "giveingredient", "givetotem", "reload", "altar");
-
+public class TotemAltarsCommand
+implements CommandExecutor,
+TabCompleter {
+    private static final List<String> ADMIN_SUBS = List.of("giveshard", "givealtar", "givefinishedaltar", "givebedrockrelic", "givetotem", "purgelegacy", "reload");
+    private static final List<String> PURGE_LEGACY_TARGETS = List.of("all", "loaded");
+    private static final List<String> TOTEM_TYPES = List.of("blast", "shadow", "storm", "swap", "guardian", "all");
     private final TotemAltars plugin;
 
     public TotemAltarsCommand(TotemAltars plugin) {
         this.plugin = plugin;
     }
 
-    @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (args.length == 0) { sendUsage(sender); return true; }
-
-        String sub = args[0].toLowerCase(Locale.ROOT);
-
-        // altar: available to players with totemaltars.use
-        if (sub.equals("altar")) {
-            if (!sender.hasPermission("totemaltars.use")) {
-                msg(sender, "&cYou don't have permission.");
-                return true;
-            }
-            if (!(sender instanceof Player player)) {
-                msg(sender, "&cThis command can only be used in-game.");
-                return true;
-            }
-            handleAltar(player);
-            return true;
-        }
-
-        // All other subcommands require totemaltars.admin
         if (!sender.hasPermission("totemaltars.admin")) {
-            msg(sender, "&cYou don't have permission.");
+            this.msg(sender, "&cYou don't have permission.");
             return true;
         }
-
-        switch (sub) {
-            case "createaltar"   -> handleCreateAltar(sender);
-            case "removealtar"   -> handleRemoveAltar(sender);
-            case "giveingredient"-> handleGive(sender, args, false);
-            case "givetotem"     -> handleGive(sender, args, true);
-            case "reload"        -> handleReload(sender);
-            default              -> sendUsage(sender);
+        if (args.length == 0) {
+            this.sendUsage(sender);
+            return true;
+        }
+        switch (args[0].toLowerCase(Locale.ROOT)) {
+            case "giveshard": {
+                this.handleGiveShard(sender, args);
+                break;
+            }
+            case "givealtar": {
+                this.handleGiveAltar(sender, args);
+                break;
+            }
+            case "givefinishedaltar": {
+                this.handleGiveFinishedAltar(sender, args);
+                break;
+            }
+            case "givebedrockrelic": {
+                this.handleGiveBedrockRelic(sender, args);
+                break;
+            }
+            case "givetotem": {
+                this.handleGiveTotem(sender, args);
+                break;
+            }
+            case "purgelegacy": {
+                this.handlePurgeLegacy(sender, args);
+                break;
+            }
+            case "reload": {
+                this.handleReload(sender);
+                break;
+            }
+            default: {
+                this.sendUsage(sender);
+            }
         }
         return true;
     }
 
-    // ── Admin: createaltar ────────────────────────────────────────────────────────
-
-    private void handleCreateAltar(CommandSender sender) {
-        if (!(sender instanceof Player player)) {
-            msg(sender, "&cThis command can only be used in-game.");
+    private void handleGiveShard(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            this.msg(sender, "&cUsage: /totemaltars giveshard <player> [amount]");
             return;
         }
-
-        Block target = player.getTargetBlockExact(5);
+        Player target = Bukkit.getPlayer((String)args[1]);
         if (target == null) {
-            msg(sender, "&cYou must be looking at an anvil within 5 blocks.");
+            this.msg(sender, this.plugin.getConfigManager().getMessage("player-not-found"));
             return;
         }
-
-        Material mat = target.getType();
-        if (mat != Material.ANVIL && mat != Material.CHIPPED_ANVIL && mat != Material.DAMAGED_ANVIL) {
-            msg(sender, "&cThat block is not an anvil. Must be ANVIL, CHIPPED_ANVIL, or DAMAGED_ANVIL.");
-            return;
+        int amount = 1;
+        if (args.length >= 3) {
+            try {
+                amount = Math.max(1, Math.min(64, Integer.parseInt(args[2])));
+            }
+            catch (NumberFormatException numberFormatException) {
+                // empty catch block
+            }
         }
-
-        boolean created = plugin.getAltarManager().createAltar(target.getLocation());
-        if (!created) {
-            msg(sender, "&cA Totem Altar already exists at that location.");
-            return;
-        }
-
-        Location loc = target.getLocation();
-        msg(sender, "&aTotem Altar created at &e"
-                + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ() + "&a.");
+        ItemStack shard = this.plugin.getItemUtil().createShard();
+        shard.setAmount(amount);
+        target.getInventory().addItem(new ItemStack[]{shard}).values().forEach(overflow -> target.getWorld().dropItemNaturally(target.getLocation(), overflow));
+        String feedback = this.plugin.getConfigManager().getMessage("give-success").replace("{amount}", String.valueOf(amount)).replace("{player}", target.getName());
+        this.msg(sender, feedback);
     }
 
-    // ── Admin: removealtar ────────────────────────────────────────────────────────
-
-    private void handleRemoveAltar(CommandSender sender) {
-        if (!(sender instanceof Player player)) {
-            msg(sender, "&cThis command can only be used in-game.");
+    private void handleGiveAltar(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            this.msg(sender, "&cUsage: /totemaltars givealtar <player> [amount]");
             return;
         }
-
-        Block target = player.getTargetBlockExact(5);
+        Player target = Bukkit.getPlayer((String)args[1]);
         if (target == null) {
-            msg(sender, "&cYou must be looking at an altar anvil within 5 blocks.");
+            this.msg(sender, this.plugin.getConfigManager().getMessage("player-not-found"));
             return;
         }
-
-        boolean removed = plugin.getAltarManager().removeAltar(target.getLocation());
-        if (!removed) {
-            msg(sender, "&cNo Totem Altar found at that location.");
-            return;
+        int amount = 1;
+        if (args.length >= 3) {
+            try {
+                amount = Math.max(1, Math.min(64, Integer.parseInt(args[2])));
+            }
+            catch (NumberFormatException numberFormatException) {
+                // empty catch block
+            }
         }
-
-        Location loc = target.getLocation();
-        msg(sender, "&aTotem Altar removed from &e"
-                + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ() + "&a.");
+        ItemStack altar = this.plugin.getItemUtil().createAltar();
+        altar.setAmount(amount);
+        target.getInventory().addItem(new ItemStack[]{altar}).values().forEach(overflow -> target.getWorld().dropItemNaturally(target.getLocation(), overflow));
+        String feedback = this.plugin.getConfigManager().getMessage("give-altar-success").replace("{amount}", String.valueOf(amount)).replace("{player}", target.getName());
+        this.msg(sender, feedback);
     }
 
-    // ── Player: altar (find nearest) ──────────────────────────────────────────────
-
-    private void handleAltar(Player player) {
-        if (plugin.getAltarManager().getAltarCount() == 0) {
-            msg(player, "&cNo Totem Altars exist yet.");
+    private void handleGiveFinishedAltar(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            this.msg(sender, "&cUsage: /totemaltars givefinishedaltar <player> [amount]");
             return;
         }
-
-        Location nearest = plugin.getAltarManager().getNearestAltar(player.getLocation());
-        if (nearest == null) {
-            msg(player, "&cNo Totem Altars found.");
+        Player target = Bukkit.getPlayer((String)args[1]);
+        if (target == null) {
+            this.msg(sender, this.plugin.getConfigManager().getMessage("player-not-found"));
             return;
         }
-
-        String worldName = nearest.getWorld().getName();
-        int x = nearest.getBlockX();
-        int y = nearest.getBlockY();
-        int z = nearest.getBlockZ();
-
-        StringBuilder sb = new StringBuilder("&6Nearest Totem Altar: &e")
-                .append(worldName)
-                .append("&6, X: &e").append(x)
-                .append("&6, Y: &e").append(y)
-                .append("&6, Z: &e").append(z);
-
-        if (nearest.getWorld().equals(player.getWorld())) {
-            int dist = (int) Math.round(player.getLocation().distance(nearest));
-            sb.append(" &7(").append(dist).append(" blocks away)");
+        int amount = 1;
+        if (args.length >= 3) {
+            try {
+                amount = Math.max(1, Math.min(64, Integer.parseInt(args[2])));
+            }
+            catch (NumberFormatException numberFormatException) {
+                // empty catch block
+            }
         }
-
-        msg(player, sb.toString());
+        ItemStack altar = this.plugin.getItemUtil().createFinishedAltar();
+        altar.setAmount(amount);
+        target.getInventory().addItem(new ItemStack[]{altar}).values().forEach(overflow -> target.getWorld().dropItemNaturally(target.getLocation(), overflow));
+        String feedback = this.plugin.getConfigManager().getMessage("give-finished-altar-success").replace("{amount}", String.valueOf(amount)).replace("{player}", target.getName());
+        this.msg(sender, feedback);
     }
 
-    // ── Admin: giveingredient / givetotem ─────────────────────────────────────────
+    private void handleGiveBedrockRelic(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            this.msg(sender, "&cUsage: /totemaltars givebedrockrelic <player>");
+            return;
+        }
+        Player target = Bukkit.getPlayer((String)args[1]);
+        if (target == null) {
+            this.msg(sender, this.plugin.getConfigManager().getMessage("player-not-found"));
+            return;
+        }
+        ItemStack relic = this.plugin.getItemUtil().createBedrockRelic();
+        target.getInventory().addItem(new ItemStack[]{relic}).values().forEach(overflow -> target.getWorld().dropItemNaturally(target.getLocation(), overflow));
+        String feedback = this.plugin.getConfigManager().getMessage("give-bedrock-relic-success").replace("{player}", target.getName());
+        this.msg(sender, feedback);
+    }
 
-    private void handleGive(CommandSender sender, String[] args, boolean isTotem) {
-        String subcmd = isTotem ? "givetotem" : "giveingredient";
+    private void handleGiveTotem(CommandSender sender, String[] args) {
         if (args.length < 3) {
-            msg(sender, "&cUsage: /totemaltars " + subcmd
-                    + " <player> <blast|shadow|storm|swap|guardian> [amount]");
+            this.msg(sender, "&cUsage: /totemaltars givetotem <player> <blast|shadow|storm|swap|guardian|all> [amount]");
             return;
         }
-
-        Player target = Bukkit.getPlayer(args[1]);
+        Player target = Bukkit.getPlayer((String)args[1]);
         if (target == null) {
-            msg(sender, plugin.getConfigManager().getMessage("player-not-found"));
+            this.msg(sender, this.plugin.getConfigManager().getMessage("player-not-found"));
             return;
         }
-
-        String type = args[2].toLowerCase(Locale.ROOT);
-        if (!TYPES.contains(type)) {
-            msg(sender, plugin.getConfigManager().getMessage("invalid-type"));
+        String typeArg = args[2].toLowerCase(Locale.ROOT);
+        if (typeArg.equals("all")) {
+            for (String type : com.totemaltars.utils.ItemUtil.AFFINITY_TYPES) {
+                ItemStack totem = this.plugin.getItemUtil().createForgedTotem(type);
+                target.getInventory().addItem(new ItemStack[]{totem}).values().forEach(overflow -> target.getWorld().dropItemNaturally(target.getLocation(), overflow));
+            }
+            this.msg(sender, "&aGiven 1 of each totem type to &e" + target.getName() + "&a.");
             return;
         }
-
+        if (!com.totemaltars.utils.ItemUtil.AFFINITY_TYPES.contains(typeArg)) {
+            this.msg(sender, "&cUnknown totem type. Use: blast, shadow, storm, swap, guardian, or all.");
+            return;
+        }
         int amount = 1;
         if (args.length >= 4) {
-            try { amount = Math.max(1, Math.min(64, Integer.parseInt(args[3]))); }
-            catch (NumberFormatException ignored) {}
+            try {
+                amount = Math.max(1, Math.min(64, Integer.parseInt(args[3])));
+            }
+            catch (NumberFormatException numberFormatException) {
+                // empty catch block
+            }
         }
-
-        ItemStack item = isTotem
-                ? plugin.getItemUtil().createTotem(type)
-                : plugin.getItemUtil().createIngredient(type);
-        item.setAmount(amount);
-
-        // Drop any overflow at the player's feet rather than silently discarding it
-        target.getInventory().addItem(item).values()
-                .forEach(overflow -> target.getWorld().dropItemNaturally(target.getLocation(), overflow));
-
-        String itemLabel = capitalize(type) + (isTotem ? " Totem" : " Ingredient");
-        String feedback = plugin.getConfigManager().getMessage("give-success")
-                .replace("{amount}", String.valueOf(amount))
-                .replace("{item}",   itemLabel)
-                .replace("{player}", target.getName());
-        msg(sender, feedback);
+        ItemStack totem = this.plugin.getItemUtil().createForgedTotem(typeArg);
+        totem.setAmount(amount);
+        target.getInventory().addItem(new ItemStack[]{totem}).values().forEach(overflow -> target.getWorld().dropItemNaturally(target.getLocation(), overflow));
+        String displayType = Character.toUpperCase(typeArg.charAt(0)) + typeArg.substring(1);
+        this.msg(sender, "&aGiven &e" + amount + "x &f" + displayType + " Totem &ato &e" + target.getName() + "&a.");
     }
 
-    // ── Admin: reload ─────────────────────────────────────────────────────────────
+    private void handlePurgeLegacy(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            this.msg(sender, "&cUsage: /totemaltars purgelegacy <player|all|loaded>");
+            return;
+        }
+        String targetArg = args[1].toLowerCase(Locale.ROOT);
+        int removed;
+        switch (targetArg) {
+            case "all": {
+                removed = this.plugin.getLegacyIngredientCleanup().scanOnlinePlayers("command:" + sender.getName() + ":all");
+                removed += this.plugin.getLegacyIngredientCleanup().scanLoadedTileInventories("command:" + sender.getName() + ":all");
+                this.msg(sender, "&aPurged &e" + removed + " &alegacy ingredient item(s) from online players and loaded containers.");
+                break;
+            }
+            case "loaded": {
+                removed = this.plugin.getLegacyIngredientCleanup().scanLoadedTileInventories("command:" + sender.getName() + ":loaded");
+                this.msg(sender, "&aPurged &e" + removed + " &alegacy ingredient item(s) from loaded containers.");
+                break;
+            }
+            default: {
+                Player target = Bukkit.getPlayer((String)args[1]);
+                if (target == null) {
+                    this.msg(sender, this.plugin.getConfigManager().getMessage("player-not-found"));
+                    return;
+                }
+                removed = this.plugin.getLegacyIngredientCleanup().scanPlayer(target, "command:" + sender.getName() + ":player:" + target.getName());
+                this.msg(sender, "&aPurged &e" + removed + " &alegacy ingredient item(s) from &e" + target.getName() + "&a.");
+                break;
+            }
+        }
+    }
 
     private void handleReload(CommandSender sender) {
-        plugin.getConfigManager().reload();
-        msg(sender, plugin.getConfigManager().getMessage("reload-success"));
+        this.plugin.getConfigManager().reload();
+        this.msg(sender, this.plugin.getConfigManager().getMessage("reload-success"));
     }
 
-    // ── Tab completion ────────────────────────────────────────────────────────────
-
-    @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (!sender.hasPermission("totemaltars.admin")) {
+            return List.of();
+        }
         return switch (args.length) {
-            case 1 -> {
-                List<String> opts = sender.hasPermission("totemaltars.admin") ? ALL_SUBS : List.of("altar");
-                yield filterStart(opts, args[0]);
-            }
+            case 1 -> this.filterStart(ADMIN_SUBS, args[0]);
             case 2 -> {
-                if (!sender.hasPermission("totemaltars.admin")) yield List.of();
                 String sub = args[0].toLowerCase(Locale.ROOT);
-                if (sub.equals("giveingredient") || sub.equals("givetotem"))
-                    yield Bukkit.getOnlinePlayers().stream()
-                            .map(Player::getName)
-                            .filter(n -> n.toLowerCase().startsWith(args[1].toLowerCase()))
-                            .toList();
+                if (sub.equals("giveshard") || sub.equals("givealtar") || sub.equals("givefinishedaltar") || sub.equals("givebedrockrelic") || sub.equals("givetotem")) {
+                    yield Bukkit.getOnlinePlayers().stream().map(Player::getName).filter(n -> n.toLowerCase().startsWith(args[1].toLowerCase())).toList();
+                }
+                if (sub.equals("purgelegacy")) {
+                    List<String> options = new java.util.ArrayList<>(PURGE_LEGACY_TARGETS);
+                    options.addAll(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList());
+                    yield options.stream().filter(n -> n.toLowerCase(Locale.ROOT).startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
+                }
                 yield List.of();
             }
             case 3 -> {
-                if (!sender.hasPermission("totemaltars.admin")) yield List.of();
                 String sub = args[0].toLowerCase(Locale.ROOT);
-                if (sub.equals("giveingredient") || sub.equals("givetotem"))
-                    yield filterStart(TYPES, args[2]);
+                if (sub.equals("givetotem")) {
+                    yield this.filterStart(TOTEM_TYPES, args[2]);
+                }
+                yield List.of();
+            }
+            case 4 -> {
+                String sub = args[0].toLowerCase(Locale.ROOT);
+                if (sub.equals("givetotem") && !args[2].equalsIgnoreCase("all")) {
+                    yield List.of("1", "4", "8", "16", "32", "64").stream().filter(n -> n.startsWith(args[3])).toList();
+                }
                 yield List.of();
             }
             default -> List.of();
         };
     }
 
-    // ── Utility ───────────────────────────────────────────────────────────────────
-
     private List<String> filterStart(List<String> list, String prefix) {
-        return list.stream()
-                   .filter(s -> s.startsWith(prefix.toLowerCase(Locale.ROOT)))
-                   .toList();
+        return list.stream().filter(s -> s.startsWith(prefix.toLowerCase(Locale.ROOT))).toList();
     }
 
     private void sendUsage(CommandSender sender) {
-        msg(sender, "&eTotemAltars commands:");
-        if (sender.hasPermission("totemaltars.admin")) {
-            msg(sender, "&7  /totemaltars createaltar   &8- Create altar at the anvil you are looking at");
-            msg(sender, "&7  /totemaltars removealtar   &8- Remove the altar you are looking at");
-            msg(sender, "&7  /totemaltars giveingredient <player> <blast|shadow|storm|swap|guardian> [amount]");
-            msg(sender, "&7  /totemaltars givetotem     <player> <blast|shadow|storm|swap|guardian> [amount]");
-            msg(sender, "&7  /totemaltars reload");
-        }
-        if (sender.hasPermission("totemaltars.use")) {
-            msg(sender, "&7  /totemaltars altar         &8- Show the nearest Totem Altar");
-        }
+        this.msg(sender, "&eTotemAltars commands:");
+        this.msg(sender, "&7  /totemaltars giveshard <player> [amount]");
+        this.msg(sender, "&7  /totemaltars givealtar <player> [amount]");
+        this.msg(sender, "&7  /totemaltars givefinishedaltar <player> [amount]");
+        this.msg(sender, "&7  /totemaltars givebedrockrelic <player>");
+        this.msg(sender, "&7  /totemaltars givetotem <player> <blast|shadow|storm|swap|guardian|all> [amount]");
+        this.msg(sender, "&7  /totemaltars purgelegacy <player|all|loaded>");
+        this.msg(sender, "&7  /totemaltars reload");
     }
 
     private void msg(CommandSender sender, String legacy) {
-        sender.sendMessage(LegacyComponentSerializer.legacyAmpersand().deserialize(legacy));
-    }
-
-    private String capitalize(String s) {
-        if (s == null || s.isEmpty()) return s;
-        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+        sender.sendMessage((Component)LegacyComponentSerializer.legacyAmpersand().deserialize(legacy));
     }
 }

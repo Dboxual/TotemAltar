@@ -1,13 +1,28 @@
 # Gradle
 .gradle/
 build/
-bin/
+
+# Gradle-managed local deps/cache
+libraries/
+versions/
+cache/
 
 # IDE
 .idea/
 *.iml
 .vscode/
+*.code-workspace
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Compiled
+*.class
+out/
+target/
+
+# Logs
+*.log
+
+# Note: gradlew and gradle/wrapper/ are intentionally tracked

@@ -1,66 +1,259 @@
 # ============================================================
-#  TotemAltars Configuration
+#  TotemAltars Configuration  —  v1.1.16
 # ============================================================
-# config-version is managed automatically — do not edit it.
-config-version: 1
 
-# Drop chances per totem type (0.0 = never, 1.0 = always)
-drop-chances:
-  blast:    0.10   # Wither Skeleton → Volatile Bone
-  shadow:   0.15   # Creaking        → Shadow Heartwood
-  storm:    0.10   # Enderman        → Void Chorus    (Warped Forest OR during a storm)
-  swap:     0.15   # Shulker         → Fractured Echo
-  guardian: 0.15   # Guardian        → Sentinel Eye
+shard:
+  # Chance (0.0–1.0) that a hostile mob killed by a player drops a Totem Shard.
+  # 0.01 = 1% chance. Lowered from 0.05 in v1.1.11 due to high acquisition rate
+  # on established mob farms. Raise this value if drops feel too rare.
+  drop-chance: 0.01
+  item-name: "&dTotem Shard"
+  # Sound played to the player when a shard finishes morphing into a typed shard.
+  morph-sound: ENTITY_PLAYER_LEVELUP
+  # Particle burst spawned on the player when a shard morphs.
+  morph-particle: TOTEM_OF_UNDYING
 
-# Cooldown (seconds) applied to ALL totem types after any totem pops.
+# ── Affinity progression ────────────────────────────────────────────────────
+# threshold: how many matching mob kills are needed to morph a shard.
+# mob-types: maps each affinity type to the list of EntityType names that
+#            contribute to it. Names must match Bukkit EntityType constants
+#            exactly (uppercase, e.g. WITHER_SKELETON).
+# The first affinity to reach the threshold permanently morphs the shard.
+# Add or remove mobs freely — all mappings are read from config at runtime.
+affinity:
+  threshold: 10
+  mob-types:
+    blast:
+      - CREEPER
+      - WITHER_SKELETON
+    storm:
+      - ENDERMAN
+    shadow:
+      - WITCH
+      - EVOKER
+    guardian:
+      - WARDEN
+    swap:
+      - PIGLIN_BRUTE
+
+# ── Altar ────────────────────────────────────────────────────────────────────
+# The Totem Altar item is a DAMAGED_ANVIL with a custom PDC tag.
+# Placed altar begins INACTIVE (Damaged Anvil in world).
+# Repair ritual (right-click + insert Wither Skull) upgrades it to ACTIVE (Anvil).
+altar:
+  item-name: "&5Totem Altar"
+  # Shaped crafting recipe for the Totem Altar.
+  # Each row must be exactly 3 characters. Use a space for empty slots.
+  # ingredient keys below map each character to a Bukkit Material name.
+  recipe:
+    shape:
+      - "OOO"
+      - "DED"
+      - "ONO"
+    ingredients:
+      O: OBSIDIAN
+      E: ECHO_SHARD
+      D: DIAMOND
+      N: NETHER_STAR
+
+  # ── Hologram ─────────────────────────────────────────────────────────────────
+  # Floating text displayed above every placed altar.
+  hologram:
+    enabled: true
+    # Use legacy colour codes: &c=red &b=aqua &5=purple &a=green &l=bold
+    # Text shown when the altar is inactive (unrepaired) — red to signal broken state
+    inactive-text: "&c&l✦ BROKEN ALTAR ✦"
+    # Text shown when the altar has been restored — instructs player to insert a typed shard
+    active-text: "&b&l✦ INSERT SHARD ✦"
+    # Text shown while the altar is waiting for a Totem of Undying to be inserted
+    awaiting-totem-text: "&e&l⚡ INSERT TOTEM ⚡"
+    # Text shown after forging is complete and the totem is waiting to be claimed
+    totem-ready-text: "&a&l✦ CLAIM YOUR TOTEM ✦"
+    # Title line displayed above the kill counter during a repair ritual
+    ritual-title: "&5&lRITUAL"
+    # Kill counter line during ritual — {current} and {required} are replaced at runtime
+    ritual-counter-format: "&dSouls: {current} / {required}"
+    # Height in blocks above the altar block's base (2.5 clears the anvil model)
+    height: 2.5
+
+  # ── Placement effect ─────────────────────────────────────────────────────────
+  # Sound and particle burst fired when an altar item is placed.
+  placement-effect:
+    enabled: true
+    # Bukkit Sound enum name (uppercase). Example: ENTITY_EVOKER_CAST_SPELL
+    sound: ENTITY_EVOKER_CAST_SPELL
+    # Bukkit Particle enum name (uppercase, data-less only). Example: PORTAL
+    particle: PORTAL
+
+  # ── Idle particles ───────────────────────────────────────────────────────────
+  # Slow ambient particles emitted around every placed altar while it exists.
+  idle-particles:
+    enabled: true
+    # Bukkit Particle enum name (data-less only). WITCH = small green spell sparks.
+    particle: WITCH
+    # Ticks between each particle pulse  (20 = 1 s, 40 = 2 s, 60 = 3 s)
+    interval-ticks: 40
+
+# ── Ritual ───────────────────────────────────────────────────────────────────
+ritual:
+  # How many ritual mobs must die for the ritual to complete.
+  required-kills: 25
+  # Maximum ritual mobs alive at the same time per altar.
+  max-alive-mobs: 6
+  # Ticks between mob top-up spawns (20 ticks = 1 second).
+  spawn-interval-ticks: 60
+  # Spawn radius in blocks from the altar (random within min–max).
+  spawn-radius-min: 3
+  spawn-radius-max: 7
+  # Visual-only lightning strike on each ritual mob spawn (no damage, no fire, no player hurt)
+  spawn-lightning-effect-enabled: true
+  # Block radius within which nearby players receive broadcast messages.
+  broadcast-radius: 30
+  # Mob pool for ritual spawns. Must be valid Bukkit EntityType names.
+  mob-pool:
+    - ZOMBIE
+    - HUSK
+    - SKELETON
+    - BLAZE
+    - VEX
+
+  # ── Vex spawning ─────────────────────────────────────────────────────────────
+  # VEX must appear in mob-pool above for these settings to have any effect.
+  vex:
+    enabled: true
+    # Extra chance roll when VEX is drawn from the pool (0.0–1.0; 0.25 = 25%)
+    spawn-chance: 0.25
+    # Maximum Vex alive at once per active ritual
+    max-active: 2
+
+  # ── Ritual ambient particles ─────────────────────────────────────────────────
+  # Particles spawned around the altar on each mob top-up cycle during the ritual.
+  particles:
+    enabled: true
+    # Bukkit Particle enum name (data-less only). SOUL_FIRE_FLAME = cyan wisp.
+    particle: SOUL_FIRE_FLAME
+
+# ── Guide book ────────────────────────────────────────────────────────────────
+# When a player picks up a Totem Shard for the first time they receive a written
+# guide book explaining the altar recipe and forge flow. Set enabled: false to
+# disable this entirely. The UUID list is stored in player_data.yml.
+guide-book:
+  enabled: true
+  # Sound played to the player when the book is given.
+  # Bukkit Sound enum name (uppercase). ITEM_BOOK_PAGE_TURN = page-turn sound.
+  sound: ITEM_BOOK_PAGE_TURN
+
+# ── Global cooldown ───────────────────────────────────────────────────────────
+# Seconds a player must wait between any custom totem ability activations.
 global-cooldown: 15
 
-# Per-ability tuning
+# ── Totem ability settings ────────────────────────────────────────────────────
 abilities:
   blast:
     radius: 8.0
     knockback-strength: 3.0
   shadow:
+    # Seconds the Shadow Totem invisibility lasts.
     duration-seconds: 15
   storm:
+    # Teleport distance range in blocks from the player's current position.
     min-distance: 25
     max-distance: 35
+    # How many random locations to try before giving up.
     max-attempts: 50
   swap:
-    range: 25
+    # Maximum block distance to find a swap target.
+    range: 25.0
 
-# Display names for custom items — supports & colour codes
+# ── Bedrock Relic ─────────────────────────────────────────────────────────────
+# The Bedrock Relic is a separate progression item dropped in Bastion Remnant
+# chests. It is NOT a Totem Shard. Activate it on a Bedrock block, then bind
+# it to a repaired Totem Altar to open one BedRocker pickaxe enchant.
+bedrock-relic:
+  # Chance (0.0–1.0) that one Bedrock Relic appears in a Bastion Remnant chest.
+  # 0.03 = 3% per chest. Increase if relics feel too rare on your server.
+  spawn-chance: 0.03
+  # Seconds required to mine a Bedrock block with a BedRocker pickaxe.
+  # Crack animation progresses visually over this duration. Default 5.
+  break-seconds: 5
+  # Duration (ticks) of the Totem Altar binding sequence.
+  # 100 ticks = 5 seconds. Must stand near the altar for this duration.
+  binding-ticks: 100
+  # Extra durability consumed from a BedRocker pickaxe when Bedrock is destroyed.
+  durability-cost: 100
+
+# ── Legacy ingredient cleanup ────────────────────────────────────────────────
+# Removes old pre-shard-system ingredient items from online players, ender chests,
+# loaded tile inventories, and shulker boxes contained inside those inventories.
+legacy-cleanup:
+  enabled: true
+  on-enable-loaded-containers: true
+  on-player-join: true
+  on-chunk-load: true
+  scan-shulker-contents: true
+  log-removals: true
+
+# ── Item display names ────────────────────────────────────────────────────────
 item-names:
-  volatile-bone:    "&7Volatile Bone"
-  shadow-heartwood: "&8Shadow Heartwood"
-  void-chorus:      "&dVoid Chorus"
-  fractured-echo:   "&eFractured Echo"
-  sentinel-eye:     "&3Sentinel Eye"
   blast-totem:      "&cBlast Totem"
   shadow-totem:     "&8Shadow Totem"
-  storm-totem:      "&dStorm Totem"
+  storm-totem:      "&bStorm Totem"
   swap-totem:       "&eSwap Totem"
   guardian-totem:   "&3Guardian Totem"
 
-# Plugin messages — supports & colour codes
 messages:
-  global-cooldown-message:       "&cTotem on cooldown! &e{seconds}s &cremaining."
-  blast-activated:               "&cBlast Totem Activated!"
-  shadow-activated:              "&8Shadow Totem Activated!"
-  storm-activated:               "&dStorm Totem Activated!"
-  swap-activated:                "&eSwap Totem Activated!"
-  swap-no-target:                "&cNo player within range to swap with!"
-  guardian-activated:            "&3Guardian Totem Activated! Your ally has been pulled to you."
-  guardian-ally-teleported:      "&3You were pulled to &f{player} &3by their Guardian Totem!"
-  guardian-link-success:         "&3Guardian link established with &f{player}&3! Both of you now hold linked Guardian Totems."
-  guardian-link-success-target:  "&f{player} &3has linked their Guardian Totem with you!"
-  guardian-already-linked:       "&cYou already have an active Guardian link."
-  guardian-target-linked:        "&cThat player already has an active Guardian link."
-  guardian-self-link:            "&cYou cannot link to yourself."
-  guardian-not-linked:           "&7Guardian Totem activated, but it was not linked to anyone."
-  guardian-partner-offline:      "&cYour linked Guardian partner is offline."
-  no-safe-location:              "&cCouldn't find a safe teleport location!"
-  reload-success:                "&aTotemAltars config reloaded!"
-  give-success:                  "&aGiven &e{amount}x {item} &ato &e{player}&a."
-  player-not-found:              "&cPlayer not found."
-  invalid-type:                  "&cInvalid totem type. Use: blast, shadow, storm, swap, or guardian."
+  shard-morphed:                "&5Your shard awakened into a {type}&5!"
+  forge-needs-shard:            "&cHold a fully awakened typed shard and right-click the altar."
+  reload-success:               "&aTotemAltars config reloaded!"
+  give-success:                 "&aGiven &e{amount}x Totem Shard &ato &e{player}&a."
+  give-altar-success:           "&aGiven &e{amount}x Totem Altar &ato &e{player}&a."
+  give-finished-altar-success:  "&aGiven &e{amount}x Finished Totem Altar &ato &e{player}&a."
+  give-bedrock-relic-success:   "&aGiven a &eBedrock Relic &ato &e{player}&a."
+  player-not-found:             "&cPlayer not found."
+  altar-bound-success:          "&5The altar absorbs the shard and awakens as a {type} altar."
+  altar-requires-morphed-shard: "&cOnly a morphed Totem Shard can awaken an altar."
+  altar-already-bound:          "&cThis altar is already bound as a {type} altar."
+  altar-not-bound:              "&cThis altar has not been bound with a shard yet."
+  not-an-altar:                 "&cThis is not a Totem Altar."
+  ritual-started:               "&5The altar begins to stir..."
+  ritual-complete:              "&aThe ritual is complete."
+  ritual-collapsed:             "&cThe ritual collapses."
+  ritual-already-active:        "&cA repair ritual is already in progress at this altar."
+  forge-success:                "&5The altar forges the shard into a totem."
+  forge-insert-totem:           "&5The shard is absorbed. &eInsert a &6Totem of Undying &eto awaken the altar."
+  forge-needs-totem:            "&cThis altar needs a &6Totem of Undying &cto awaken. Hold one and right-click."
+  forge-totem-ready:            "&5The altar has sealed your totem. &aRight-click the altar to claim it."
+  forge-complete:               "&5The altar awakens! Your totem has been forged."
+  forge-wrong-owner:            "&cThis altar's totem belongs to someone else."
+  altar-active:                 "&5This altar is repaired and ready."
+  altar-restored:               "&aThe altar has been restored!"
+  # ── Totem activation ──────────────────────────────────────────────────────
+  global-cooldown-message:      "&cTotem on cooldown — &e{seconds}s &cremaining."
+  cooldown-display:             "&7Totem cooldown: &c{seconds}s"
+  blast-activated:              "&cThe world ripples around you."
+  shadow-activated:             "&8You fade into the shadows."
+  storm-activated:              "&bLightning carries you away."
+  swap-activated:               "&eYou swap positions with a nearby player!"
+  swap-no-target:               "&eNo players nearby to swap with."
+  no-safe-location:             "&cNo safe landing found — Storm Totem ability cancelled."
+  guardian-activated:           "&3Your linked ally &f{player} &3has been pulled to you."
+  guardian-ally-teleported:     "&3You were pulled to &f{player}&3."
+  guardian-not-linked:          "&cYour Guardian Totem is not linked to anyone."
+  guardian-partner-offline:     "&cYour linked partner is not online."
+  # ── Guardian linking ──────────────────────────────────────────────────────
+  guardian-link-success:        "&3You are now linked with &f{player}&3. Guard each other well."
+  guardian-link-success-target: "&3{player} &3has linked their Guardian Totem with you."
+  guardian-already-linked:      "&cYou already have a linked Guardian Totem."
+  guardian-target-linked:       "&c{player} already has a linked Guardian Totem."
+  guardian-self-link:           "&cYou cannot link with yourself."
+  # ── Bedrock Relic ─────────────────────────────────────────────────────────
+  bedrock-relic-activate:       "&6The relic resonates with the foundation of the world."
+  bedrock-relic-activate-2:     "&7Return it to a Totem Altar."
+  bedrock-altar-not-active:     "&cThe altar must be repaired before it can accept the relic."
+  bedrock-altar-busy:           "&cThis altar is busy with another forging."
+  bedrock-binding-complete:     "&6The altar has accepted the Bedrock Relic."
+  bedrock-enchant-success:      "&6Your pickaxe has been imbued with BedRocker."
+  bedrock-enchant-needs-relic:  "&cSlot 1 requires an Activated Bedrock Relic."
+  bedrock-enchant-needs-pickaxe: "&cSlot 2 requires a Netherite Pickaxe."
+  bedrock-enchant-pickaxe-already: "&cThis pickaxe already has BedRocker."
+  bedrock-break-not-enough-durability: "&cYour BedRocker pickaxe needs at least {cost} durability remaining to break Bedrock."
