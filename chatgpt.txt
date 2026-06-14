@@ -254,3 +254,10 @@ IN-GAME TEST CHECKLIST
 13. CONFIG test — change break-seconds in config.yml:
     a. Set bedrock-relic.break-seconds: 10 in config.yml and reload plugin.
     b. Mine bedrock — EXPECTED: 10-second mine time, crack grows over 10 s.
+
+---
+[2026-06-14] BRANCH CLEANUP
+- No dev branch — initialized directly on main.
+- Final main commit: 1399b91 (TotemAltars — full source sync, updated .gitignore and README)
+- Dev deleted: N/A
+- Notes: Project was not a git repo; initialized and pushed to Dboxual/TotemAltar. .gitignore updated to exclude libraries/, versions/, cache/.
