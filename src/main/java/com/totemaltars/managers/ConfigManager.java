@@ -231,8 +231,23 @@ public class ConfigManager {
         return this.plugin.getConfig().getDouble("abilities.swap.range", 25.0);
     }
 
-    public double getBedrockRelicSpawnChance() {
-        return this.plugin.getConfig().getDouble("bedrock-relic.spawn-chance", 0.03);
+    public double getBedrockRelicBastionChance() {
+        if (this.plugin.getConfig().isSet("bedrock-relic.spawn-chance")) {
+            return this.plugin.getConfig().getDouble("bedrock-relic.spawn-chance", 0.05);
+        }
+        return this.plugin.getConfig().getDouble("bedrock-relic.bastion-chance", 0.05);
+    }
+
+    public double getBedrockRelicAncientCityChance() {
+        return this.plugin.getConfig().getDouble("bedrock-relic.ancient-city-chance", 0.08);
+    }
+
+    public double getBedrockRelicNetherFortressChance() {
+        return this.plugin.getConfig().getDouble("bedrock-relic.nether-fortress-chance", 0.06);
+    }
+
+    public double getBedrockRelicStrongholdChance() {
+        return this.plugin.getConfig().getDouble("bedrock-relic.stronghold-chance", 0.05);
     }
 
     public int getBedrockBreakSeconds() {

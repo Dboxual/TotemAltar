@@ -1,5 +1,5 @@
 # ============================================================
-#  TotemAltars Configuration  —  v1.1.16
+#  TotemAltars Configuration  —  v1.1.25
 # ============================================================
 
 shard:
@@ -166,13 +166,25 @@ abilities:
     range: 25.0
 
 # ── Bedrock Relic ─────────────────────────────────────────────────────────────
-# The Bedrock Relic is a separate progression item dropped in Bastion Remnant
+# The Bedrock Relic is a separate progression item dropped in structure loot
 # chests. It is NOT a Totem Shard. Activate it on a Bedrock block, then bind
 # it to a repaired Totem Altar to open one BedRocker pickaxe enchant.
 bedrock-relic:
   # Chance (0.0–1.0) that one Bedrock Relic appears in a Bastion Remnant chest.
-  # 0.03 = 3% per chest. Increase if relics feel too rare on your server.
-  spawn-chance: 0.03
+  # 0.05 = 5% per chest.
+  # NOTE: the old key "spawn-chance" is still honored if it already exists in
+  # your config.yml from an earlier version — it will keep overriding this
+  # value until you remove it. New installs should use "bastion-chance".
+  bastion-chance: 0.05
+  # Chance (0.0–1.0) that one Bedrock Relic appears in an Ancient City chest
+  # (includes the frozen suspicious-sand loot table). 0.08 = 8% per chest.
+  ancient-city-chance: 0.08
+  # Chance (0.0–1.0) that one Bedrock Relic appears in a Nether Fortress chest.
+  # 0.06 = 6% per chest.
+  nether-fortress-chance: 0.06
+  # Chance (0.0–1.0) that one Bedrock Relic appears in a Stronghold chest
+  # (corridor, crossing, and library loot tables). 0.05 = 5% per chest.
+  stronghold-chance: 0.05
   # Seconds required to mine a Bedrock block with a BedRocker pickaxe.
   # Crack animation progresses visually over this duration. Default 5.
   break-seconds: 5

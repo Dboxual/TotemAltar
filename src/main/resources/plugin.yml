@@ -1,5 +1,5 @@
 name: TotemAltars
-version: '1.1.23'
+version: '1.1.25'
 main: com.totemaltars.TotemAltars
 api-version: '1.21'
 description: Custom Totem Shards dropped by hostile mobs — foundation for the shard system.

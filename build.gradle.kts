@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "com.totemaltars"
-version = "1.1.23"
+version = "1.1.25"
 
 java {
     toolchain {

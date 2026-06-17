@@ -1,14 +1,14 @@
 ================================================================================
 TotemAltars — Build Report
 ================================================================================
-Date          : 2026-06-13
+Date          : 2026-06-16
 Built by      : Claude (Sonnet 4.6)
-Version       : 1.1.23
+Version       : 1.1.25
 
 ================================================================================
 PLUGIN VERSION
 --------------
-1.1.23
+1.1.25
 
 BUILD COMMAND
 -------------
@@ -16,248 +16,153 @@ BUILD COMMAND
 
 BUILD RESULT
 ------------
-SUCCESS (13 pre-existing Sound.valueOf deprecation warnings — unchanged from prior versions)
+SUCCESS (13 pre-existing Sound.valueOf deprecation warnings — unchanged from
+prior versions; no new warnings introduced)
 
 JAR PATH
 --------
-/home/pi/Plugins/TotemAltar/build/TotemAltars-1.1.23.jar
+/home/pi/Plugins/TotemAltar/build/TotemAltars-1.1.25.jar
 
 ================================================================================
-WHAT CHANGED IN 1.1.23
+WHAT CHANGED IN 1.1.25
 ================================================================================
 
-CHANGED — Shard kill progress now only counts when held in offhand
--------------------------------------------------------------------
-Previous behaviour:
-  AffinityListener checked the offhand first, but if no valid unmorphed shard was
-  there, it fell through to scan the full hotbar (slots 0–8). A shard sitting
-  anywhere in the hotbar silently accumulated kill progress without the player
-  needing to put it in the offhand.
+CHANGED — Raised Bedrock Relic natural-spawn chances, cleaned up config naming
+-----------------------------------------------------------------------------
+This follows directly on from 1.1.24, which first added natural Bedrock Relic
+generation to Ancient City, Nether Fortress, and Stronghold chests (on top of
+the existing Bastion Remnant drop). The defaults from that release were
+intentionally conservative; this release raises them and gives every
+structure a clearly named, dedicated config key.
 
-New behaviour:
-  Only the offhand slot is checked. If the offhand does not contain a valid
-  unmorphed Totem Shard, the kill event is ignored for all shard affinity types.
-  No hotbar scan, no inventory scan, no main-hand fallback.
+NEW DEFAULT CHANCES (all under bedrock-relic: in config.yml)
+-----------------------------------------------------------------------------
+  ancient-city-chance:     0.08  (8%)    per Ancient City chest   — was 0.02
+  nether-fortress-chance:  0.06  (6%)    per Nether Fortress chest — was 0.02
+  stronghold-chance:       0.05  (5%)    per Stronghold chest      — was 0.015
+  bastion-chance:          0.05  (5%)    per Bastion Remnant chest — was 0.03
+                                          (key renamed from "spawn-chance")
 
-  All five affinity types (blast, shadow, storm, guardian, swap) are covered by
-  the same path — there is one check, one slot, one rule.
+Each chance is independent — every structure rolls against its own value, so
+raising one does not affect the others.
 
-  Morphed/typed shards continue to ignore kill events exactly as before
-  (isMorphed() guard is unchanged).
+LOOT TABLES AFFECTED (vanilla minecraft: namespace, matched by key)
+-----------------------------------------------------------------------------
+  ancient-city-chance      -> chests/ancient_city, chests/ancient_city_ice_box
+  nether-fortress-chance   -> chests/nether_bridge
+  stronghold-chance        -> chests/stronghold_corridor,
+                               chests/stronghold_crossing,
+                               chests/stronghold_library
+  bastion-chance           -> chests/bastion_bridge, chests/bastion_hoglin_stable,
+                               chests/bastion_other, chests/bastion_treasure
 
-Guide book updated:
-  ItemUtil.createGuideBook() page 1: "Keep one in your hotbar" →
-  "Hold one in your offhand" so the in-game text matches the new requirement.
+No structure-generation hook is needed for any of these — BedrockRelicLootListener
+hooks LootGenerateEvent, which fires the first time Minecraft populates a
+container's contents (naturally generated or otherwise), and matches against
+the loot table key shown above.
+
+ITEM DROPPED — still the dormant relic, not the finished pickaxe
+-----------------------------------------------------------------------------
+Unchanged from 1.1.24: every drop is plugin.getItemUtil().createBedrockRelic() —
+the dormant, NON-activated Bedrock Relic (Gilded Blackstone, "&6Bedrock Relic"
+display name, "Dormant. Bring to a Bedrock block to awaken." lore), carrying
+the BEDROCK_RELIC_KEY PersistentDataContainer tag (totemaltars:bedrock_relic)
+that ItemUtil.isBedrockRelic() and the altar-binding flow check for. The
+finished BedRocker pickaxe enchant is never placed directly in loot — it can
+only be created by activating a relic on Bedrock, then binding the Activated
+Bedrock Relic at a repaired Totem Altar.
+
+BACKWARD COMPATIBILITY — old "spawn-chance" key still works
+-----------------------------------------------------------------------------
+The Bastion chance config key was renamed from "spawn-chance" to
+"bastion-chance" for naming consistency with the other three structures.
+ConfigManager.getBedrockRelicBastionChance() now checks for the old
+"spawn-chance" key first:
+
+  - If your config.yml already has "bedrock-relic.spawn-chance" set (from an
+    earlier install), that value keeps being used for the Bastion chance —
+    your customization is not silently overridden by the new default.
+  - If "spawn-chance" is not present, "bedrock-relic.bastion-chance" is used.
+  - New installs only ever see "bastion-chance" (the new default config.yml
+    no longer ships "spawn-chance" at all).
+
+Note: on first startup after upgrading, the plugin's normal copyDefaults
+behaviour will add "bastion-chance: 0.05" into your existing config.yml
+alongside your old "spawn-chance" line. That's expected and harmless — as
+long as "spawn-chance" remains in the file, it keeps taking priority. Remove
+it manually whenever you're ready to fully switch to "bastion-chance".
 
 FILES CHANGED
 -------------
-  AffinityListener.java   — hotbar scan loop (slots 0–8) removed; offhand-only
-  ItemUtil.java           — guide book page 1 text updated (hotbar → offhand)
-  build.gradle.kts        — version 1.1.23
-  plugin.yml              — version 1.1.23
-  changelog.txt           — entry added
-  chatgpt.txt             — this file
+  ConfigManager.java            — getBedrockRelicSpawnChance() replaced with
+                                   getBedrockRelicBastionChance() (checks legacy
+                                   "spawn-chance" key first, falls back to
+                                   "bastion-chance"); raised the other three
+                                   structure defaults
+  BedrockRelicLootListener.java — calls the renamed getBedrockRelicBastionChance()
+  config.yml                    — bastion-chance (0.05, replaces spawn-chance),
+                                   ancient-city-chance raised to 0.08,
+                                   nether-fortress-chance raised to 0.06,
+                                   stronghold-chance raised to 0.05
+  build.gradle.kts              — version 1.1.25
+  plugin.yml                    — version 1.1.25
+  changelog.txt                 — entry added
+  chatgpt.txt                   — this file
 
 ================================================================================
 IN-GAME TEST CHECKLIST
 ================================================================================
 
-1. GOLDEN PATH — shard in offhand:
-   a. Obtain a fresh Totem Shard (/totemaltars giveshard <you>).
-   b. Place it in your OFFHAND (F key or drag to offhand slot).
-   c. Kill a mob that grants affinity (e.g. creeper for blast, wither skeleton
-      for shadow — check config.yml mob-affinity mappings).
-   d. EXPECTED: shard lore updates — the matching affinity counter increments by 1.
-      Confirm by checking the shard's lore in your offhand.
+1. ANCIENT CITY (8% default):
+   a. /locate structure minecraft:ancient_city, travel there.
+   b. Open several chests (each container only rolls loot once, the first
+      time it's opened — open enough chests, or boost the chance below to
+      confirm faster).
+   c. To force a quick confirmation, temporarily set
+      bedrock-relic.ancient-city-chance: 1.0 in config.yml and run
+      /totemaltars reload, then open a fresh, never-opened chest.
+   d. EXPECTED: A "&6Bedrock Relic" item (Gilded Blackstone, dormant lore)
+      appears in the chest.
 
-2. SHARD IN HOTBAR — should NOT count:
-   a. Take the shard out of your offhand and place it in any hotbar slot (0–8).
-   b. Kill the same type of mob multiple times.
-   c. EXPECTED: shard lore does NOT change. No affinity progress.
+2. NETHER FORTRESS (6% default):
+   a. Same approach — set nether-fortress-chance: 1.0, reload, open a fresh
+      Nether Fortress chest.
+   b. EXPECTED: Bedrock Relic appears.
 
-3. SHARD IN MAIN HAND only — should NOT count:
-   a. Hold the shard in your main hand (active hotbar slot), not in offhand.
-   b. Kill a mob that grants affinity.
-   c. EXPECTED: no progress. Shard lore unchanged.
+3. STRONGHOLD (5% default):
+   a. Set stronghold-chance: 1.0, reload, open a fresh chest in the corridor,
+      crossing/altar room, or library.
+   b. EXPECTED: Bedrock Relic appears in any of the three room types.
 
-4. SHARD IN INVENTORY (non-hotbar) — should NOT count:
-   a. Move the shard to a non-hotbar inventory slot (rows 1–3 of your bag).
-   b. Kill affinity mobs.
-   c. EXPECTED: no progress.
+4. BASTION REMNANT — confirm rename didn't break anything (5% default):
+   a. Set bastion-chance: 1.0, reload, open a fresh Bastion Remnant chest.
+   b. EXPECTED: Bedrock Relic appears, same as before the rename.
 
-5. MULTIPLE KILLS — accumulation works correctly:
-   a. With shard in offhand, kill 9 matching mobs (threshold is 10 by default).
-   b. EXPECTED: affinity value reaches 9/10 in lore.
-   c. Kill the 10th — EXPECTED: shard morphs, shard-morphed message appears,
-      morph sound plays, particle burst spawns.
+5. LEGACY KEY COMPATIBILITY:
+   a. If your config.yml still has a "spawn-chance" line under bedrock-relic
+      from before 1.1.25, change ONLY spawn-chance (not bastion-chance) to
+      1.0 and reload.
+   b. EXPECTED: Bastion Remnant chests still reliably produce a relic, proving
+      the old key is still honored even though "bastion-chance" also exists
+      in the file now.
 
-6. MORPHED SHARD in offhand — should NOT count:
-   a. After morph, keep the now-typed shard in offhand and kill more mobs.
-   b. EXPECTED: no further affinity changes. Morphed shards ignore kills.
+6. CHANCE ISOLATION:
+   a. Set the four chances back to their new defaults (or mix — e.g. one at
+      1.0, rest at 0.0) and open chests across multiple structure types.
+   b. EXPECTED: Only the structure(s) with a non-zero chance produce relics;
+      confirms the four values are independent.
 
-7. WRONG AFFINITY MOB — offhand shard present, different mob type:
-   a. Put a shard in offhand.
-   b. Kill a mob whose entity type is not mapped in config.yml (e.g. a cow).
-   c. EXPECTED: no progress on any affinity. Lore unchanged.
+7. METADATA / FULL FLOW CHECK:
+   a. Pick up a relic found in any of the four chest types.
+   b. Right-click a Bedrock block to activate it, then bind the Activated
+      Bedrock Relic to a repaired Totem Altar.
+   c. EXPECTED: Identical behaviour regardless of which structure it came
+      from — confirms the PDC tag (totemaltars:bedrock_relic) is consistent
+      since every drop comes from the same createBedrockRelic() factory.
 
-8. NO SHARD ANYWHERE — baseline sanity:
-   a. Have no shard in inventory at all.
-   b. Kill affinity mobs.
-   c. EXPECTED: nothing happens. No errors in server console.
-
-9. GUIDE BOOK text check:
-   a. Run /totemaltars giveshard — you get a guide book in some builds, or
-      check a fresh book if one can be obtained via command.
-   b. Open the book, read page 1.
-   c. EXPECTED: text reads "Hold one in your offhand and defeat certain mobs
-      to awaken its power." — NOT "hotbar".
-
-================================================================================
-TotemAltars — Build Report
-================================================================================
-Date          : 2026-06-12
-Built by      : Claude (Sonnet 4.6)
-Version       : 1.1.22
+8. RELOAD SAFETY:
+   a. Edit any of the four chance values while the server is running, run
+      /totemaltars reload, then open a fresh chest of that structure type.
+   b. EXPECTED: New chance takes effect immediately, no restart required.
 
 ================================================================================
-PLUGIN VERSION
---------------
-1.1.22
-
-BUILD COMMAND
--------------
-./gradlew jar
-
-BUILD RESULT
-------------
-SUCCESS (13 pre-existing Sound.valueOf deprecation warnings — unchanged from prior versions)
-
-JAR PATH
---------
-/home/pi/Plugins/TotemAltar/build/TotemAltars-1.1.22.jar
-
-================================================================================
-WHAT CHANGED IN 1.1.22
-================================================================================
-
-REWORK — Bedrocker: countdown replaced with mining-feel behavior
-----------------------------------------------------------------
-Goal: the BedRocker should feel like a special pickaxe that actually mines
-bedrock, not a magic ability that clicks once and waits.
-
-Because bedrock has hardness -1, the client never shows crack animation and
-the server never completes a natural break. The new implementation approximates
-genuine mining using server-side block crack packets:
-
-  1. Player holds left-click on bedrock with a BedRocker pickaxe.
-     → BlockDamageEvent fires → mining session starts.
-
-  2. Every 5 ticks (0.25 s), the server sends a sendBlockDamage progress update
-     to the mining player. The crack visually grows from stage 0 to full over
-     the configured break-seconds duration (default 5 s).
-
-  3. If the player stops clicking or aims at a different block, the client sends
-     BlockDamageAbort → BlockDamageAbortEvent fires → session is cancelled and
-     the crack animation is reset on the client via sendBlockChange.
-
-  4. As a belt-and-suspenders, the 5-tick loop also runs a raytrace gaze check
-     (player.rayTraceBlocks(6.0)) and cancels if the player isn't looking at the
-     exact original block. This catches any edge case where the abort event may
-     not have fired.
-
-  5. Session is also cancelled on PlayerQuitEvent and PlayerDeathEvent.
-
-  6. If the player holds on-target for the full duration, the block is broken
-     with the existing break effects (lightning, SMOKE particles, explosion sound)
-     and the configured durability cost is applied.
-
-Cancellation messages:
-  "Mining stopped."              — player released click / looked away (abort event)
-  "Mining interrupted — wrong tool."    — hotbarred a different item mid-mine
-  "Mining interrupted — moved too far." — walked out of 7-block range
-  "Mining interrupted — look at the block." — raytrace gaze check fallback
-
-Config change — break-ticks → break-seconds:
-  bedrock-relic.break-ticks (old, removed) → bedrock-relic.break-seconds (new)
-  Default: 5 (seconds). All existing configs using break-ticks will fall back to
-  the default (5 s) — update config.yml on the server to set a custom value.
-
-FILES CHANGED
---------------
-  BedrockBreakListener.java  — full rewrite: crack animation loop, BlockDamageAbortEvent,
-                               PlayerDeathEvent, abortSession() with crack reset
-  ConfigManager.java         — getBedrockBreakTicks() removed; getBedrockBreakSeconds() added
-  config.yml                 — break-ticks: 100 → break-seconds: 5
-  build.gradle.kts           — version 1.1.22
-
-================================================================================
-IN-GAME TEST CHECKLIST
-================================================================================
-
-1. GOLDEN PATH — mine the full duration while looking:
-   a. Hold BedRocker pickaxe, hold left-click on a bedrock block.
-   b. Keep crosshair on that block for the full 5 seconds.
-   c. EXPECTED: crack animation visually grows as you hold.
-      Action bar shows "Mining bedrock... 4s" ... "3s" ... "2s" ... "1s".
-      "Bedrock shattered." — block disappears with lightning + sound + smoke.
-
-2. RELEASE LEFT-CLICK mid-mine:
-   a. Start mining, let go of left-click at ~3 seconds.
-   b. EXPECTED: crack animation resets (block looks normal).
-      Action bar: "Mining stopped." Block is intact.
-
-3. LOOK AT ADJACENT BLOCK mid-mine (re-click on new block):
-   a. Start mining, then hold left-click and move crosshair to a different block.
-   b. EXPECTED: original block crack resets; "Mining stopped." is shown.
-      You start mining the new block (but it won't break unless it's also bedrock
-      with BedRocker). Original bedrock is intact.
-
-4. LOOK AT AIR mid-mine (release to air while holding click):
-   a. Start mining, aim crosshair at open air while still holding left-click.
-   b. EXPECTED: "Mining stopped." crack resets.
-
-5. LOOK AT NEARBY NON-BEDROCK BLOCK mid-mine:
-   a. Start mining bedrock, swing crosshair to stone next to it.
-   b. EXPECTED: "Mining stopped." Original bedrock intact.
-
-6. GAZE RAYTRACE fallback — do not stop clicking, just drift crosshair very slightly:
-   a. Start mining, then inch crosshair just off the block face without releasing.
-   b. EXPECTED: either "Mining stopped." (abort event fired) or
-      "Mining interrupted — look at the block." (raytrace fallback).
-      Either way, block is intact and crack resets.
-
-7. SWAP TOOL mid-mine (hotbar key):
-   a. Start mining, press a hotbar number to switch away from BedRocker.
-   b. EXPECTED: "Mining interrupted — wrong tool." Crack resets. Block intact.
-
-8. WALK AWAY mid-mine:
-   a. Start mining, sprint away while holding left-click.
-   b. EXPECTED: "Mining interrupted — moved too far." Crack resets. Block intact.
-
-9. LOG OUT mid-mine:
-   a. Start mining, then /quit or close client.
-   b. Log back in — EXPECTED: no session, no delayed break, block intact.
-
-10. PLAYER DEATH mid-mine:
-    a. Start mining (near a cliff or lava), take lethal damage mid-mine.
-    b. EXPECTED: session cancelled on death. No delayed break after respawn.
-
-11. ANOTHER PLAYER removes the bedrock mid-mine:
-    a. Start mining, have an admin /setblock the block to air during count.
-    b. EXPECTED: session silently cancelled — no double-break or crash.
-
-12. NOT ENOUGH DURABILITY:
-    a. Use a near-broken BedRocker (remaining durability < configured cost).
-    b. Left-click bedrock.
-    c. EXPECTED: "Not enough durability" message. Mining never starts.
-
-13. CONFIG test — change break-seconds in config.yml:
-    a. Set bedrock-relic.break-seconds: 10 in config.yml and reload plugin.
-    b. Mine bedrock — EXPECTED: 10-second mine time, crack grows over 10 s.
-
----
-[2026-06-14] BRANCH CLEANUP
-- No dev branch — initialized directly on main.
-- Final main commit: 1399b91 (TotemAltars — full source sync, updated .gitignore and README)
-- Dev deleted: N/A
-- Notes: Project was not a git repo; initialized and pushed to Dboxual/TotemAltar. .gitignore updated to exclude libraries/, versions/, cache/.

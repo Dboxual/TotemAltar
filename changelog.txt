@@ -2,6 +2,59 @@
 TotemAltars — Changelog
 ================================================================================
 
+[1.1.25] — 2026-06-16
+----------------------
+CHANGED: Raised default Bedrock Relic natural-spawn chances and renamed the
+Bastion config key for clarity.
+
+  New defaults (all under bedrock-relic: in config.yml):
+    ancient-city-chance:     0.08  (8%)   — was 0.02
+    nether-fortress-chance:  0.06  (6%)   — was 0.02
+    stronghold-chance:       0.05  (5%)   — was 0.015
+    bastion-chance:          0.05  (5%)   — was 0.03, key renamed from
+                                             "spawn-chance"
+
+  Backward compatibility: if an existing config.yml still has the old
+  "spawn-chance" key set, ConfigManager.getBedrockRelicBastionChance() keeps
+  honoring it over the new "bastion-chance" key, so upgrading does not
+  silently change a server operator's custom Bastion chance. New installs
+  only ever see "bastion-chance".
+
+FILES: ConfigManager.java, BedrockRelicLootListener.java, config.yml,
+       build.gradle.kts, plugin.yml, chatgpt.txt
+
+--------------------------------------------------------------------------------
+
+[1.1.24] — 2026-06-16
+----------------------
+ADDED: Dormant Bedrock Relic can now naturally generate in Ancient City,
+Nether Fortress, and Stronghold chests, in addition to the existing Bastion
+Remnant chest drop.
+
+  BedrockRelicLootListener now resolves a per-structure chance from config
+  based on the vanilla loot table key:
+    - minecraft:chests/bastion_*        -> bedrock-relic.spawn-chance
+    - minecraft:chests/ancient_city*    -> bedrock-relic.ancient-city-chance
+    - minecraft:chests/nether_bridge    -> bedrock-relic.nether-fortress-chance
+    - minecraft:chests/stronghold_*     -> bedrock-relic.stronghold-chance
+
+  Each chest independently rolls its configured chance via LootGenerateEvent,
+  so this works for naturally generated structures (no per-structure code
+  needed beyond the loot table key match). The item dropped is always the
+  dormant (non-activated) Bedrock Relic produced by ItemUtil.createBedrockRelic(),
+  which already carries the BEDROCK_RELIC_KEY PDC tag the altar/activation flow
+  expects — never the finished BedRocker pickaxe.
+
+  Default chances (all configurable in config.yml under bedrock-relic:):
+    ancient-city-chance:     0.02  (2%)
+    nether-fortress-chance:  0.02  (2%)
+    stronghold-chance:       0.015 (1.5%)
+
+FILES: BedrockRelicLootListener.java, ConfigManager.java, config.yml,
+       build.gradle.kts, plugin.yml, chatgpt.txt
+
+--------------------------------------------------------------------------------
+
 [1.1.23] — 2026-06-13
 ----------------------
 CHANGED: Shard kill progress now only counts when the shard is held in the offhand.

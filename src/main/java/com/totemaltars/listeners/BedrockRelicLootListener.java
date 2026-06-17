@@ -24,11 +24,27 @@ public class BedrockRelicLootListener implements Listener {
         String key = lootTable.getKey().getKey();
 
         if (!"minecraft".equals(namespace)) return;
-        if (!key.startsWith("chests/bastion_")) return;
 
-        double chance = plugin.getConfigManager().getBedrockRelicSpawnChance();
+        double chance = getChanceForLootTable(key);
+        if (chance <= 0.0) return;
         if (random.nextDouble() >= chance) return;
 
         event.getLoot().add(plugin.getItemUtil().createBedrockRelic());
+    }
+
+    private double getChanceForLootTable(String key) {
+        if (key.startsWith("chests/bastion_")) {
+            return plugin.getConfigManager().getBedrockRelicBastionChance();
+        }
+        if (key.startsWith("chests/ancient_city")) {
+            return plugin.getConfigManager().getBedrockRelicAncientCityChance();
+        }
+        if (key.equals("chests/nether_bridge")) {
+            return plugin.getConfigManager().getBedrockRelicNetherFortressChance();
+        }
+        if (key.startsWith("chests/stronghold_")) {
+            return plugin.getConfigManager().getBedrockRelicStrongholdChance();
+        }
+        return 0.0;
     }
 }
